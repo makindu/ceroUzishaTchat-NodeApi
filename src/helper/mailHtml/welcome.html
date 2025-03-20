@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenue</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+        }
+
+        .header img {
+            width: 100px;
+        }
+
+        .content {
+            text-align: center;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 16px;
+            color: #ffffff;
+            background-color: #28a745;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+
+        .credetals {
+            text-align: center;
+            font-size: larger;
+            display: block;
+            background-color: aqua;
+            text-decoration: underline;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #888888;
+        }
+
+        .strock-icon {
+            background: #1f1d1d;
+            padding: 5px;
+            border-radius: 50%;
+            --ionicon-stroke-width: 10px;
+        }
+
+        .avatar-footer {
+            background: #323268;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .div-centered {
+            display: flex !important;
+            justify-content: center !important;
+        }
+
+        .font-size-small {
+            font-size: x-small;
+        }
+
+        .white-color {
+            color: rgb(255, 255, 255);
+            font-weight: bolder;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="cid:favicon" alt="Logo">
+        </div>
+        <div class="content">
+            <h1>{{username}} bienvenue chez Weka Akiba</h1>
+            <p>Nous sommes ravis de vous compter parmi nous.</p>
+            <p>Cliquez sur le bouton ci-dessous pour vous connecter et commencer à explorer notre site.</p>
+            <div class="credetals">
+                <h3>votre nom d'utilisateur est, {{username}}!</h3>
+                <p>Votre mot de passe est : {{password}}</p>
+            </div>
+            <a href="https://example.com/login" class="button">Se connecter</a>
+        </div>
+        <div class="footer" ,id="footer">
+            <!-- <ion-content class="ion-padding" color="medium"> -->
+            <div class="div-centered">
+                <ion-buttons>
+                    <ion-button>
+                        <ion-avatar class="avatar-footer">
+                            <ion-icon name="logo-facebook"></ion-icon>
+                        </ion-avatar>
+                    </ion-button>
+                    <ion-button>
+                        <ion-avatar class="avatar-footer">
+                            <ion-icon name="logo-twitter"></ion-icon>
+                        </ion-avatar>
+                    </ion-button>
+                    <ion-button>
+                        <ion-avatar class="avatar-footer">
+                            <ion-icon name="logo-youtube"></ion-icon>
+                        </ion-avatar>
+                    </ion-button>
+                    <ion-button>
+                        <ion-avatar class="avatar-footer">
+                            <ion-icon name="logo-linkedin"></ion-icon>
+                        </ion-avatar>
+                    </ion-button>
+                </ion-buttons>
+
+            </div>
+            <br>
+            <div class="div-centered">
+                <ion-item line="none" color="medium" class="font-size-small">
+                    <ion-icon name="call-outline" size="small" class="strock-icon" color="light"></ion-icon>
+                    <ion-text>&nbsp;<span class="white-color">Service client :</span> +243 991 518 715</ion-text>
+                </ion-item>
+            </div>
+            <div class="div-centered">
+                <ion-item line="none" color="medium" class="font-size-small">
+                    <ion-icon name="call-outline" size="small" class="strock-icon" color="light"></ion-icon>
+                    <ion-text>&nbsp;<span class="white-color">Administration :</span> +243 991 518 715</ion-text>
+                </ion-item>
+            </div>
+            <div class="div-centered">
+                <ion-item line="none" color="medium" class="font-size-small">
+                    <ion-icon name="call-outline" size="small" class="strock-icon" color="light"></ion-icon>
+                    <ion-text>&nbsp; <span class="white-color">Service Technique :</span> +243 991 518
+                        715</ion-text>
+                </ion-item>
+            </div>
+            <br>
+            <div class="div-centered">
+                <ion-text class="font-size-small">&nbsp;<span class="white-color">Service client :</span>
+                    contact@cerocepa.com</ion-text>
+            </div>
+            <div class="div-centered">
+                <ion-text class="font-size-small">&nbsp;<span class="white-color">Administration :</span>
+                    contact@cerocepa.com</ion-text>
+            </div>
+            <div class="div-centered">
+                <ion-text class="font-size-small">&nbsp; <span class="white-color">Service technique :</span>
+                    contact@cerocepa.com</ion-text>
+            </div>
+            <br>
+            <div class="div-centered">
+                <ion-text class="font-size-small" style="color: rgb(156, 156, 227);font-weight: bolder;">
+                    243 , blvd. KANYAMUHANGA, Q/ Le Volcan, C/ Goma, V/ Goma,P/Nord-Kivu,R.D.Congo
+                </ion-text>
+            </div>
+
+            <br>
+            <div class="div-centered">
+                <ion-text class="font-size-small"
+                    style="width: 300px!important; text-align: center;font-style: italic;">
+                    Lorem ipsum dolor sit amet, consectetur adipisicing elit. Ea quo, adipisci ullam sapiente libero
+                    assumenda dignissimos corrupti, nobis asperiores illum eos velit saepe unde placeat ratione
+                    dolorum. Quasi, nostrum modi. Lorem, ipsum dolor sit amet consectetur adipisicing elit. Hic, a
+                    fuga temporibus sint tenetur consequatur esse debitis consequuntur dolore minus perferendis
+                    doloribus tempore est rem mollitia obcaecati fugiat alias harum.
+                </ion-text>
+            </div>
+            <br>
+            <div class="div-centered">
+                <ion-text class="font-size-small">
+                    Visiter notre site. <a href="https://cerocepa.com" target="_blank" class="white-color">Cliquez
+                        ici</a>
+                </ion-text>
+            </div>
+
+            <!-- </ion-content> -->
+        </div>
+    </div>
+</body>
+
+</html>
+<script type="module" src="https://cdn.jsdelivr.net/npm/@ionic/core/dist/ionic/ionic.esm.js"></script>
+<script nomodule src="https://cdn.jsdelivr.net/npm/@ionic/core/dist/ionic/ionic.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@ionic/core/css/ionic.bundle.css" />
