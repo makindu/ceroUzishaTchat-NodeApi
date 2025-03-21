@@ -1,6 +1,6 @@
 const  user  = require("../../db.provider").Users;
 const { Op } = require("sequelize");
-
+const users = {};
 const UserController = {};
 
 UserController.create = async (req, res) => {
@@ -95,4 +95,7 @@ UserController.updateUser = async (req, res) => {
   }
 };
 
+UserController.getUserSocketId = (userId) => {
+  return users[userId] || null;
+}
 module.exports = UserController;

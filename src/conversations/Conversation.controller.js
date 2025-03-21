@@ -113,7 +113,7 @@ ConversationsController.getData = async (req, res) => {
           conversation_id: conversation.id,
           status: 'unread', 
           // senderId: req.body.user_id ,
-           receiverId: conversation.second_user
+           receiverId: req.body.user_id
         }
       });
       return {

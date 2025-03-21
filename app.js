@@ -9,6 +9,7 @@ app.use(cors()); // CORS est maintenant activé pour toutes les origines
 
 const http = require("http");
 const ConversationsSocket = require('./src/conversations/Conversation.socket');
+const MessagesSocket =  require('./src/messages/messages.socket');
 
 const server = http.createServer(app);
 const IO = require("socket.io")(server, {
@@ -19,8 +20,16 @@ const IO = require("socket.io")(server, {
 });
 
 IO.on("connection", (socket) => {
+  // ConversationsSocket(socket);
+  // console.log(`Utilisateur connecté : `);
   socket.emit("welcome", { message: "Welcome to my api" });
-  ConversationsSocket(socket);
+  try {
+    MessagesSocket(IO, socket);
+    
+  } catch (error) {
+    
+    socket.emit("message_error_sending", { message: error.toString() });
+  }
   console.log("new user connected");
 });
 
@@ -31,6 +40,6 @@ DBConnection.connection.sync().then(() => {
   console.log("database connected");
 });
 
-server.listen(process.env.PORT || 5000, () => {
+server.listen(process.env.PORT || 5000, '0.0.0.0', () => {
   console.log("server running on port 5000");
 });

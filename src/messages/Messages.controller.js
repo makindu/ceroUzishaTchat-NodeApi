@@ -21,9 +21,12 @@ MessagesController.create = async (req, res) => {
   }
 
   const condition = {
-    [Op.and]: [
-      { first_user: req.body.user_id },
-      { second_user: req.body.receiverId }
+    [Op.or]: [
+      { first_user: req.body.user_id ,
+       second_user: req.body.receiverId },
+       
+      { first_user: req.body.receiverId ,
+       second_user: req.body.user_id },
     ]
   };
 
@@ -31,9 +34,10 @@ MessagesController.create = async (req, res) => {
   let messageData = {};
 
   try {
-    conversationExist = await Conversations.findAll({ where: condition });
+    conversationExist = await Conversations.findOne({ where: condition });
 
-    if (conversationExist.length === 0 || conversationExist === '' && !req.body.conversation_id) {
+    if (!conversationExist) {
+      console.log("this convesation is newer i.e it's not exist at last");
       const conversationData = {
         first_user: req.body.user_id,
         second_user: req.body.receiverId,
@@ -41,7 +45,7 @@ MessagesController.create = async (req, res) => {
       };
 
       let newConversation = await Conversations.create(conversationData);
-
+      
       if (newConversation) {
         messageData = {
           content: req.body.content,
@@ -49,36 +53,41 @@ MessagesController.create = async (req, res) => {
           senderId: req.body.user_id,
           receiverId: req.body.receiverId,
           enterprise_id: req.body.enterprise_id,
-          conversation_id: newConversation.id
+          conversation_id: newConversation.dataValues.id
         };
-
+        
         // Enregistrer le message
-        await Messages.create(messageData);
+        const newmessage =  await Messages.create(messageData);
+        // console.log("this  is new convesation",newmessage);
 
         // IO.emit('newConversation', newConversation);
 
-        return res.status(200).send({ message: "Success", error: null, data: newConversation });
+        return res.status(200).send({ message: "Success", error: null, data: newmessage });
+
       } else {
         return res.status(200).send({ message: "error occurred", error: "error while creating conversation", data: null });
       }
     } else {
-      messageData = {
-        content: req.body.content,
-        medias: req.body.medias,
-        senderId: req.body.user_id,
-        receiverId: req.body.receiverId,
-        enterprise_id: req.body.enterprise_id,
-        conversation_id: req.body.conversation_id
-      };
-
-      if (!req.body.conversation_id) {
-        res.status(200).send({ message: "error", error: "conversation identification failed", data: null });
-        return;
+     
+      if (!req.body.conversation_id || req.body.conversation_id === '' ) {
+        // req.body.conversation_id = conversationExist[0].id;
+        // res.status(200).send({ message: "error", error: "conversation identification failed", data: null });
+        // return;
       }
 
-      const getConversation = await Conversations.findByPk(parseInt(req.body.conversation_id));
+      const getConversation = await Conversations.findByPk(parseInt(conversationExist.dataValues.id));
 
       if (getConversation) {
+      console.log("this convesation is exist i.e it's  exist at past");
+
+        messageData = {
+          content: req.body.content,
+          medias: req.body.medias,
+          senderId: req.body.user_id,
+          receiverId: req.body.receiverId,
+          enterprise_id: req.body.enterprise_id,
+          conversation_id: getConversation.id
+        };
         const newmessage = await Messages.create(messageData);
 
         // Émettre un événement pour informer l'UI du récepteur
