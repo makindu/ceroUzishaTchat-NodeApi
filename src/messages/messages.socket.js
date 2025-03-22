@@ -5,7 +5,7 @@ let users = {};
 
 const MessagesSocket = (io, socket) => {
   
-  socket.on("user_initiatMessage", (data) => {
+  socket.on("user_connection", (data) => {
     users[data.user_id] = socket.id;
     console.log(`Utilisateur ${users} connecté avec Socket ID: ${socket.id}`);
   });

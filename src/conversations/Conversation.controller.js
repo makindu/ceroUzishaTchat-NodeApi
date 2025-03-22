@@ -2,7 +2,7 @@ const  Conversations  = require("../../db.provider").Conversations;
 const Users =  require('../../db.provider').Users;
 const Messages =  require('../../db.provider').messages;
 const UserControl = require('../users/user.controller');
-const { Op } = require("sequelize");
+const { Op, json } = require("sequelize");
 
 const ConversationsController = {};
 
@@ -29,6 +29,7 @@ ConversationsController.create = async (FirstUser,SecondUser, EnterpriseId ) => 
     
   }
 };
+
 
 
 ConversationsController.getData = async (req, res) => {
@@ -133,8 +134,103 @@ ConversationsController.getData = async (req, res) => {
     return;
   }
 };
+ConversationsController.showOne = async (conversation_id,user_id) => {
+  console.log("getting all data");
 
+  let condition = {};
+  // if (conversation_id) {
+  //   condition = {
+  //     [Op.where]: [
+  //       { id: req.body.user_id },
+  //       { second_user: req.body.user_id }
+  //     ],
+  //     status: { [Op.ne]: 'deleted' }
+  //   };
+  // }
 
+  try {
+    const data = await Conversations.findByPk(
+         conversation_id,{ 
+      attributes: [
+        'id',
+        'first_user',
+        'second_user',
+        'status',
+        'createdAt',
+        'updatedAt',
+        'enterprise_id',
+      ], // spécifier les champs à retourner
+    });
+
+    if (!data) {
+      return res.status(200).send({ message: "No conversations found", error: null, data: [] });
+    }
+      let firstUser = null;
+      let secondUser = null;
+      
+      if (data.first_user === user_id) {
+        firstUser = await Users.findByPk(data.first_user, {
+          attributes: [
+            'id', 'user_name', 'full_name', 'user_mail', 'user_phone', 
+            'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
+          ]
+        });
+        secondUser = await Users.findByPk(data.second_user, {
+          attributes: [
+            'id', 'user_name', 'full_name', 'user_mail', 'user_phone', 
+            'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
+          ]
+        });
+      } else {
+        // Si `user_id` est le `second_user`, inversez les utilisateurs
+        firstUser = await Users.findByPk(data.second_user, {
+          attributes: [
+            'id', 'user_name', 'full_name', 'user_mail', 'user_phone', 
+            'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
+          ]
+        });
+        secondUser = await Users.findByPk(data.first_user, {
+          attributes: [
+            'id', 'user_name', 'full_name', 'user_mail', 'user_phone', 
+            'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
+          ]
+        });
+      }
+
+      // Récupérer le dernier message de la conversation
+      const lastMessage = await Messages.findOne({
+        where: { conversation_id: data.id },
+        order: [['createdAt', 'DESC']],
+        limit: 1,
+      });
+      const MessagesUser = await Messages.findAll({
+        where: { conversation_id: data.id },
+        order: [['createdAt', 'ASC']],
+      
+      });
+      const unreadMessagesCount = await Messages.count({
+        where: {
+          conversation_id: data.id,
+          status: 'unread', 
+          // senderId: req.body.user_id ,
+           receiverId: user_id
+        }
+      });
+      const enrichedConversations =  {
+        conversation: data,
+        lastMessage: lastMessage ? lastMessage : null,
+        messages : MessagesUser,
+        firstUser: firstUser ? firstUser : null,
+        secondUser: secondUser ? secondUser : null,
+        unreadMessages: unreadMessagesCount
+      };
+   
+      return    enrichedConversations;
+  } catch (error) {
+    // res.status(400).send({ status: 500, message: "Error occurred", error: error.toString(), data: [] });
+    return json( { message: "error" , data :  null});
+  }
+};
 
 ConversationsController.deletePermanently = async (req, res) => {
   const { conversation_id } = req.params;  

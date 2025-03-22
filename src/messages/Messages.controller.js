@@ -5,116 +5,166 @@ const ConversationsControler =  require('../conversations/Conversation.controlle
 const Users =  require('../../db.provider').Users;
 const UserControl = require('../users/user.controller');
 const { Op, where } = require("sequelize");
-// const IO = require('../../app') ; 
+const { getIo, getUserSocketId } = require("../../socket");
+let users = {}; 
 
 const MessagesController = {};
 
-
 MessagesController.create = async (req, res) => {
-  if (!req.body.user_id && !req.body.enterprise_id) {
-    res.status(400).send("some data is required");
-    return;
-  }
-  if (!req.body.receiverId) {
-    res.status(400).send("receiver data is required");
-    return;
-  }
+ 
+ if (!req.body.user_id && !req.body.enterprise_id) {
+   res.status(400).send("some data is required");
+   return;
+ }
+ if (!req.body.receiverId) {
+   res.status(400).send("receiver data is required");
+     return;
+   }
 
-  const condition = {
-    [Op.or]: [
-      { first_user: req.body.user_id ,
-       second_user: req.body.receiverId },
+   const condition = {
+     [Op.or]: [
+       { first_user: req.body.user_id ,
+        second_user: req.body.receiverId },
        
-      { first_user: req.body.receiverId ,
-       second_user: req.body.user_id },
-    ]
-  };
+       { first_user: req.body.receiverId ,
+        second_user: req.body.user_id },
+     ]
+   };
 
-  let conversationExist = {};
-  let messageData = {};
+   let conversationExist = {};
+   let messageData = {};
 
-  try {
-    conversationExist = await Conversations.findOne({ where: condition });
+   try {
+     conversationExist = await Conversations.findOne({ where: condition });
 
-    if (!conversationExist) {
-      console.log("this convesation is newer i.e it's not exist at last");
-      const conversationData = {
-        first_user: req.body.user_id,
-        second_user: req.body.receiverId,
-        enterprise_id: req.body.enterprise_id
-      };
+     if (!conversationExist) {
+       console.log("this convesation is newer i.e it's not exist at last");
+       const conversationData = {
+         first_user: req.body.user_id,
+         second_user: req.body.receiverId,
+         enterprise_id: req.body.enterprise_id
+       };
 
-      let newConversation = await Conversations.create(conversationData);
+       let newConversation = await Conversations.create(conversationData);
       
-      if (newConversation) {
-        messageData = {
-          content: req.body.content,
-          medias: req.body.medias,
-          senderId: req.body.user_id,
-          receiverId: req.body.receiverId,
-          enterprise_id: req.body.enterprise_id,
-          conversation_id: newConversation.dataValues.id
-        };
+       if (newConversation) {
+         messageData = {
+           content: req.body.content,
+           medias: req.body.medias,
+           senderId: req.body.user_id,
+           receiverId: req.body.receiverId,
+           enterprise_id: req.body.enterprise_id,
+           conversation_id: newConversation.dataValues.id
+         };
         
-        // Enregistrer le message
-        const newmessage =  await Messages.create(messageData);
-        // console.log("this  is new convesation",newmessage);
+          // Enregistrer le message
+         const newmessage =  await Messages.create(messageData);
+         const receiverSocketId = getUserSocketId(req.body.receiverId);
+         const senderSocketId = getUserSocketId(req.body.user_id);
+         // console.log("before emiting",receiverSocketId);
+         if (senderSocketId) {
+            try {
+              console.log("before emiting new conversation to sender",senderSocketId);
+              const socketConvesation =  getIo().to(senderSocketId).emit("new_conversation", {
+                conversation:await ConversationsControler.showOne(newConversation.dataValues.id,req.body.user_id)
+              });
+              console.log("after emiting new conversation to sender",socketConvesation);
+            } catch (error) {
+              console.log("error emiting new conversation to sender",error.toString());
+            }
+         }
+          if (receiverSocketId) {
+          try {
+            console.log("before emiting new conversation to receiver",receiverSocketId);
+            const socketConvesation =  getIo().to(receiverSocketId).emit("new_conversation", {
+                conversation:await ConversationsControler.showOne(newConversation.dataValues.id,req.body.receiverId)
+              });
+            console.log("after emiting new conversation to receiver",socketConvesation);
+          } catch (error) {
+            console.log("error emiting new conversation to receiver",error.toString());
+          }
+          
+          }
+         
+         return res.status(200).send({ message: "Success", error: null, data: newmessage });
 
-        // IO.emit('newConversation', newConversation);
-
-        return res.status(200).send({ message: "Success", error: null, data: newmessage });
-
-      } else {
-        return res.status(200).send({ message: "error occurred", error: "error while creating conversation", data: null });
-      }
-    } else {
+       } else {
+         return res.status(200).send({ message: "error occurred", error: "error while creating conversation", data: null });
+       }
+     } else {
      
-      if (!req.body.conversation_id || req.body.conversation_id === '' ) {
-        // req.body.conversation_id = conversationExist[0].id;
-        // res.status(200).send({ message: "error", error: "conversation identification failed", data: null });
-        // return;
-      }
-
-      const getConversation = await Conversations.findByPk(parseInt(conversationExist.dataValues.id));
-
-      if (getConversation) {
-      console.log("this convesation is exist i.e it's  exist at past");
-
-        messageData = {
-          content: req.body.content,
-          medias: req.body.medias,
-          senderId: req.body.user_id,
-          receiverId: req.body.receiverId,
-          enterprise_id: req.body.enterprise_id,
-          conversation_id: getConversation.id
-        };
-        const newmessage = await Messages.create(messageData);
-
-        // Émettre un événement pour informer l'UI du récepteur
-        // IO.emit('newMessage', messageData);
-        if (newmessage) {
-          res.status(200).send({ status: 200, message: "Success", error: null, data: newmessage });
+       if (!req.body.conversation_id || req.body.conversation_id === '' ) {
+          req.body.conversation_id = conversationExist[0].id;
+          res.status(200).send({ message: "error", error: "conversation identification failed", data: null });
           return;
-        }
-        else{
-          res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
+       }
 
-          return 
-        }
+       const getConversation = await Conversations.findByPk(parseInt(conversationExist.dataValues.id));
 
-      } else {
-        return res.status(200).send({ message: "error", error: "error while getting conversation", data: null });
-      }
-    }
+       if (getConversation) {
+       console.log("this convesation is exist i.e it's  exist at past");
 
-  } catch (error) {
-    res.status(500).send({
-      message: "Error occurred",
-      error: error.toString(),
-      data: null,
-    });
-  }
-};
+         messageData = {
+           content: req.body.content,
+           medias: req.body.medias,
+           senderId: req.body.user_id,
+           receiverId: req.body.receiverId,
+           enterprise_id: req.body.enterprise_id,
+           conversation_id: getConversation.id
+         };
+         const newmessage = await Messages.create(messageData);
+         if (newmessage) {
+          const receiverSocketId = getUserSocketId(req.body.receiverId);
+          const senderSocketId = getUserSocketId(req.body.user_id);
+          // console.log("before emiting",receiverSocketId);
+              if (receiverSocketId) {
+                try {
+                  console.log("before emiting",receiverSocketId);
+                  
+                const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+                    message: newmessage,
+                  });
+                  console.log("after emiting",socketMessage);
+                } catch (error) {
+                  console.log("error emiting new message",error.toString());
+                }
+              }
+
+              if (senderSocketId) {
+                try {
+                  console.log("before emiting",senderSocketId);
+                  
+                const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+                    message: newmessage,
+                  });
+                  console.log("after emiting",socketMessage);
+                } catch (error) {
+                  console.log("error emiting new message",error.toString());
+                }
+              }
+
+           res.status(200).send({ status: 200, message: "Success", error: null, data: newmessage });
+           return;
+         }
+         else{
+           res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
+
+           return 
+         }
+
+       } else {
+         return res.status(200).send({ message: "error", error: "error while getting conversation", data: null });
+       }
+     }
+
+   } catch (error) {
+     res.status(500).send({
+       message: "Error occurred",
+       error: error.toString(),
+       data: null,
+     });
+   }
+ };
 
 
 MessagesController.getData = async (req, res) => {
