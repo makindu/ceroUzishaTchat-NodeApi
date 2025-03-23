@@ -1,5 +1,5 @@
 const DBConfig = {
-  host: "192.168.1.67",
+  host: "192.168.1.72",
   port: 3306,
   database_name: "newdb",
   database_username: "node_user_api",

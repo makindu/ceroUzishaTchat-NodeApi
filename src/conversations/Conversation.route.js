@@ -5,6 +5,7 @@ const router = require("express").Router();
 router.post("/all/:value?", ConversationsController.getData);
 router.get("/:id", ConversationsController.getSingleConversations);
 router.get("delete/:id", ConversationsController.deletePermanently);
+router.get("/messages/:conversationId", ConversationsController.messages);
 // router.post("/send_message", ConversationsController.create);
 router.put("/:id", ConversationsController.updateConversations);
 

@@ -6,6 +6,66 @@ const { Op, json } = require("sequelize");
 
 const ConversationsController = {};
 
+const generatePaginationUrls = (baseUrl, page, pageSize, totalPages) => {
+  const nextUrl = page < totalPages ? `${baseUrl}?page=${page + 1}&pageSize=${pageSize}` : null;
+  const prevUrl = page > 1 ? `${baseUrl}?page=${page - 1}&pageSize=${pageSize}` : null;
+  const firstUrl = `${baseUrl}?page=1&pageSize=${pageSize}`;
+  const lastUrl = `${baseUrl}?page=${totalPages}&pageSize=${pageSize}`;
+
+  return { nextUrl, prevUrl, firstUrl, lastUrl };
+};
+
+ConversationsController.messages = async (req,res)=>{
+  try {
+    const conversationId = parseInt(req.params.conversationId);
+    if (isNaN(conversationId)) {
+      return res.status(400).json({ error: 'ID de conversation invalide.' });
+    }
+
+    // Pagination : Page et taille
+    const page = parseInt(req.query.page) || 1; // Page actuelle
+    const pageSize = parseInt(req.query.pageSize) || 10; // Messages par page
+
+    // Récupération des messages avec Sequelize
+    const { count, rows: messages } = await Messages.findAndCountAll({
+      where: { conversation_id: conversationId },
+      order: [['createdAt', 'ASC']],
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    });
+
+    // Calcul du nombre total de pages
+    const totalPages = Math.ceil(count / pageSize);
+
+    // Génération des URLs de pagination
+    const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}/messages/${conversationId}`;
+    const { nextUrl, prevUrl, firstUrl, lastUrl } = generatePaginationUrls(baseUrl, page, pageSize, totalPages);
+
+    // Réponse avec les messages et les informations de navigation
+    res.json({
+      status:200,
+      error:null,
+      message:"success",
+      currentPage: page,
+      totalPages:totalPages,
+      totalMessages: count,
+      nextUrl:nextUrl,
+      prevUrl:prevUrl,
+      firstUrl:firstUrl,
+      lastUrl:lastUrl,
+      data:messages,
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des messages :', error);
+    res.json({
+      status:400,
+      error:error,
+      message:"error",
+      data:null,
+    });
+  }
+}
+
 ConversationsController.create = async (FirstUser,SecondUser, EnterpriseId ) => {
   if (!FirstUser &&  !SecondUser ) {
     // res.status(400).send(" les utilisateur concérnés sont requis");
@@ -107,7 +167,6 @@ ConversationsController.getData = async (req, res) => {
       const MessagesUser = await Messages.findAll({
         where: { conversation_id: conversation.id },
         order: [['createdAt', 'ASC']],
-      
       });
       const unreadMessagesCount = await Messages.count({
         where: {
