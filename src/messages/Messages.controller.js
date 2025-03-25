@@ -1,12 +1,10 @@
 const  Messages  = require("../../db.provider").messages;
 const Conversations =  require('../../db.provider').Conversations;
-const ConversationsController = require("../conversations/Conversation.controller");
 const ConversationsControler =  require('../conversations/Conversation.controller');
-const Users =  require('../../db.provider').Users;
 const UserControl = require('../users/user.controller');
-const { Op, where } = require("sequelize");
-const { getIo, getUserSocketId } = require("../../socket");
-let users = {}; 
+const getUserSocketId =  require("../../socket").getUserSocketId;
+const getIo =  require("../../socket").getIo;
+const { Op, where, json } = require("sequelize");
 
 const MessagesController = {};
 
@@ -153,7 +151,7 @@ MessagesController.create = async (req, res) => {
          }
 
        } else {
-         return res.status(200).send({ message: "error", error: "error while getting conversation", data: null });
+         return res.status(500).send({ message: "error", error: "error while getting conversation", data: null });
        }
      }
 
@@ -165,6 +163,196 @@ MessagesController.create = async (req, res) => {
      });
    }
  };
+MessagesController.createMedia = async (req, res) => {
+ if (!req.body.data) {
+   res.status(400).send("data is empty ensure that data contain anything");
+   return;
+  
+ }else{
+  // let messageData = [];
+  try {
+    // Utiliser map pour créer un tableau de promesses
+    const messagePromises = req.body.data.map(async (element) => {
+      return await multipleMediaBuilt(element);
+    });
+
+    // Attendre la résolution de toutes les promesses
+    const messageData = await Promise.all(messagePromises);
+
+    res.status(200).send({
+      status: 200,
+      message: "Success",
+      error: null,
+      data: messageData.filter((msg) => msg != null), // Éliminer les messages null
+    });
+  } catch (error) {
+    res.status(500).send({
+      message: "error",
+      error: error.toString(),
+      data: null,
+    });
+  }
+ 
+ }
+
+ };
+
+   multipleMediaBuilt =  async (element)=>{
+
+    const condition = {
+      [Op.or]: [
+        { first_user: element.user_id ,
+         second_user: element.receiverId },
+        
+        { first_user: element.receiverId ,
+         second_user: element.user_id },
+      ]
+    };
+ 
+    let conversationExist = {};
+    let messageData = {};
+ 
+    try {
+      conversationExist = await Conversations.findOne({ where: condition });
+ 
+      if (!conversationExist) {
+        console.log("this convesation is newer i.e it's not exist at last");
+        const conversationData = {
+          first_user: element.user_id,
+          second_user: element.receiverId,
+          enterprise_id: element.enterprise_id
+        };
+ 
+        let newConversation = await Conversations.create(conversationData);
+       
+        if (newConversation) {
+          messageData = {
+            content: element.content,
+            medias: element.medias,
+            senderId: element.user_id,
+            receiverId: element.receiverId,
+            enterprise_id: element.enterprise_id,
+            conversation_id: newConversation.dataValues.id
+          };
+         
+          
+           // Enregistrer le message
+          const newmessage =  await Messages.create(messageData);
+          const receiverSocketId = getUserSocketId(element.receiverId);
+          const senderSocketId = getUserSocketId(element.user_id);
+          // console.log("before emiting",receiverSocketId);
+          if (senderSocketId) {
+             try {
+               console.log("before emiting new conversation to sender",senderSocketId);
+               const socketConvesation =  getIo().to(senderSocketId).emit("new_conversation", {
+                 conversation:await ConversationsControler.showOne(newConversation.dataValues.id,element.user_id)
+               });
+               console.log("after emiting new conversation to sender",socketConvesation);
+             } catch (error) {
+               console.log("error emiting new conversation to sender",error.toString());
+             }
+          }
+           if (receiverSocketId) {
+           try {
+             console.log("before emiting new conversation to receiver",receiverSocketId);
+             const socketConvesation =  getIo().to(receiverSocketId).emit("new_conversation", {
+                 conversation:await ConversationsControler.showOne(newConversation.dataValues.id,element.receiverId)
+               });
+             console.log("after emiting new conversation to receiver",socketConvesation);
+           } catch (error) {
+             console.log("error emiting new conversation to receiver",error.toString());
+           }
+           
+           }
+           JSON.stringify(newmessage.medias);
+          return  newmessage ;
+          // return res.status(200).send({ message: "Success", error: null, data: newmessage });
+ 
+        } else {
+
+          return;
+          // return res.status(200).send({ message: "error occurred", error: "error while creating conversation", data: null });
+        }
+      } else {
+      
+        if (!element.conversation_id || element.conversation_id === '' ) {
+          element.conversation_id = conversationExist[0].id;
+          //  res.status(200).send({ message: "error", error: "conversation identification failed", data: null });
+           return;
+        }
+ 
+        const getConversation = await Conversations.findByPk(parseInt(conversationExist.dataValues.id));
+ 
+        if (getConversation) {
+        console.log("this convesation is exist i.e it's  exist at past");
+ 
+          messageData = {
+            content: element.content,
+            medias: element.medias,
+            senderId: element.user_id,
+            receiverId: element.receiverId,
+            enterprise_id: element.enterprise_id,
+            conversation_id: getConversation.id
+          };
+          const newmessage = await Messages.create(messageData);
+          if (newmessage) {
+           const receiverSocketId = getUserSocketId(element.receiverId);
+           const senderSocketId = getUserSocketId(element.user_id);
+           // console.log("before emiting",receiverSocketId);
+               if (receiverSocketId) {
+                 try {
+                   console.log("before emiting",receiverSocketId);
+                   
+                 const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+                     message: newmessage,
+                   });
+                   console.log("after emiting",socketMessage);
+                 } catch (error) {
+                   console.log("error emiting new message",error.toString());
+                 }
+               }
+ 
+               if (senderSocketId) {
+                 try {
+                   console.log("before emiting",senderSocketId);
+                   
+                 const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+                     message: newmessage,
+                   });
+                   console.log("after emiting",socketMessage);
+                 } catch (error) {
+                   console.log("error emiting new message",error.toString());
+                 }
+               }
+               console.log("in building ", newmessage);
+           JSON.stringify(newmessage.medias);
+
+               return newmessage;
+            // res.status(200).send({ status: 200, message: "Success", error: null, data: newmessage });
+            // return;
+          }
+          else{
+            return;
+            // res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
+ 
+            return 
+          }
+ 
+        } else {
+      return;
+          // return res.status(200).send({ message: "error", error: "error while getting conversation", data: null });
+        }
+      }
+ 
+    } catch (error) {
+      return error;
+      // res.status(500).send({
+      //   message: "Error occurred",
+      //   error: error.toString(),
+      //   data: null,
+      // });
+    }
+ }
 
 
 MessagesController.getData = async (req, res) => {

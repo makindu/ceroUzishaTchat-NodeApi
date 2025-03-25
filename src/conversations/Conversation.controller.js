@@ -1,7 +1,6 @@
 const  Conversations  = require("../../db.provider").Conversations;
 const Users =  require('../../db.provider').Users;
 const Messages =  require('../../db.provider').messages;
-const UserControl = require('../users/user.controller');
 const { Op, json } = require("sequelize");
 
 const ConversationsController = {};
@@ -42,6 +41,11 @@ ConversationsController.messages = async (req,res)=>{
     const { nextUrl, prevUrl, firstUrl, lastUrl } = generatePaginationUrls(baseUrl, page, pageSize, totalPages);
 
     // Réponse avec les messages et les informations de navigation
+let  medias = await Promise.all( messages.map((message)=>{
+    const media =   JSON.parse(message.medias);
+    message.medias = media;
+      return message;
+    }));
     res.json({
       status:200,
       error:null,
@@ -53,7 +57,7 @@ ConversationsController.messages = async (req,res)=>{
       prevUrl:prevUrl,
       firstUrl:firstUrl,
       lastUrl:lastUrl,
-      data:messages,
+      data:medias,
     });
   } catch (error) {
     console.error('Erreur lors de la récupération des messages :', error);
@@ -89,8 +93,6 @@ ConversationsController.create = async (FirstUser,SecondUser, EnterpriseId ) => 
     
   }
 };
-
-
 
 ConversationsController.getData = async (req, res) => {
   console.log("getting all data");
@@ -164,10 +166,10 @@ ConversationsController.getData = async (req, res) => {
         order: [['createdAt', 'DESC']],
         limit: 1,
       });
-      const MessagesUser = await Messages.findAll({
-        where: { conversation_id: conversation.id },
-        order: [['createdAt', 'ASC']],
-      });
+      // const MessagesUser = await Messages.findAll({
+      //   where: { conversation_id: conversation.id },
+      //   order: [['createdAt', 'ASC']],
+      // });
       const unreadMessagesCount = await Messages.count({
         where: {
           conversation_id: conversation.id,
@@ -179,7 +181,7 @@ ConversationsController.getData = async (req, res) => {
       return {
         conversation: conversation,
         lastMessage: lastMessage ? lastMessage : null,
-        messages : MessagesUser,
+        messages : [],
         firstUser: firstUser ? firstUser : null,
         secondUser: secondUser ? secondUser : null,
         unreadMessages: unreadMessagesCount
@@ -317,7 +319,6 @@ ConversationsController.deletePermanently = async (req, res) => {
     });
   }
 };
-
 
 ConversationsController.getSingleConversations = async (req, res) => {
   // let condition = {};
