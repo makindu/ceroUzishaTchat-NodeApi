@@ -42,7 +42,7 @@ ConversationsController.messages = async (req,res)=>{
 
     // Réponse avec les messages et les informations de navigation
 let  medias = await Promise.all( messages.map((message)=>{
-    const media =   JSON.parse(message.medias);
+    const media =   JSON.parse(message.medias); 
     message.medias = media;
       return message;
     }));
