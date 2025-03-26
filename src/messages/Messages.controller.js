@@ -4,7 +4,7 @@ const ConversationsControler =  require('../conversations/Conversation.controlle
 const UserControl = require('../users/user.controller');
 const getUserSocketId =  require("../../socket").getUserSocketId;
 const getIo =  require("../../socket").getIo;
-const { Op, where, json } = require("sequelize");
+const { Op, where, json, DATE } = require("sequelize");
 
 const MessagesController = {};
 
@@ -196,7 +196,6 @@ MessagesController.createMedia = async (req, res) => {
  }
 
  };
-
    multipleMediaBuilt =  async (element)=>{
 
     const condition = {
@@ -354,17 +353,22 @@ MessagesController.createMedia = async (req, res) => {
     }
  }
 
-
 MessagesController.getData = async (req, res) => {
   console.log("getting all data")
-  let condition = {};
+  let conditionMessage = {
+      [Op.and]:
+        {conversation_id: req.body.conversation_id },
+        status: { [Op.ne]: 'deleted' }
+    };
   if (req.params.value) {
     condition = {
       [Op.or]: { id: req.params.value, senderId: req.params.value , receiverId : req.params.value },
     };
   }
   try {
-    const data = await Messages.findAll();
+    const data = await Messages.findAll({
+      where : conditionMessage
+    });
     res.status(200).send({ message: "Success", error: null, data: data });
   } catch (error) {
     res
@@ -374,7 +378,11 @@ MessagesController.getData = async (req, res) => {
 };
 MessagesController.getMessagesByConversation = async (req, res) => {
   console.log("getting all data"+req.body.conversation_id)
-  let condition = {};
+  let conditionMessage = {
+    [Op.and]:
+      {conversation_id: req.body.conversation_id },
+      status: { [Op.ne]: 'deleted' }
+  };
   if (!req.body.conversation_id) {
     res.status(500).send({ status: 500, message: "errror", error: "no conversation found", data: null });
     
@@ -392,9 +400,7 @@ MessagesController.getMessagesByConversation = async (req, res) => {
   // }
   try {
     const data = await Messages.findAll({
-      where: {
-        conversation_id: req.body.conversation_id
-      },
+      where: conditionMessage,
       groupBy: [['createdAt', 'DESC']],
       
     });
@@ -416,7 +422,9 @@ MessagesController.groupMessagesByReceivernConversation = async (req, res) => {
         {
           senderId: req.body.senderId,
           receiverId: req.body.senderId
-        }
+        },
+      status: { [Op.ne]: 'deleted' }
+
       
     };
   }
@@ -469,15 +477,39 @@ MessagesController.groupMessagesByReceivernConversation = async (req, res) => {
       .send({ message: "Error occurred !", error: error.toString(), data: null });
   }
 };
-
-
-MessagesController.getSingleMessages = async (req, res) => {
-  // let condition = {};
-  // if (req.params.id) {
-  //   condition = {
-  //     id:id,
-  //   };
-  // }
+getSingleMessages = async (id) => {
+  let condition = {
+    [Op.and]:
+      {id: id },
+      status: { [Op.ne]: 'deleted' }
+  };
+  if (!id) {
+    // res
+    //   .status(400)
+    //   .send({ message: "Error", error: "No data found", data: {} });
+    return;
+  }
+  try {
+    const data = await Messages.findByPk(
+      parseInt(id));
+      let  dataParsed = JSON.parse(data.medias); 
+        data.medias = dataParsed;
+         
+    // res.status(200).send({ message: "Success", error: null, data: data });
+    return data;
+  } catch (error) {
+    // res
+    //   .status(400)
+    //   .send({ message: "Error occured", error: error.toString(), data: [] });
+    return null;
+  }
+};
+MessagesController.findByPk = async (req, res) => {
+  let condition = {
+    [Op.and]:
+      {conversation_id: req.body.conversation_id },
+      status: { [Op.ne]: 'deleted' }
+  };
   if (!req.params.id) {
     res
       .status(400)
@@ -485,7 +517,8 @@ MessagesController.getSingleMessages = async (req, res) => {
     return;
   }
   try {
-    const data = await Messages.findByPk(parseInt(req.params.id));
+    const data = await Messages.findByPk(
+      parseInt(req.params.id));
     res.status(200).send({ message: "Success", error: null, data: data });
   } catch (error) {
     res
@@ -493,8 +526,12 @@ MessagesController.getSingleMessages = async (req, res) => {
       .send({ message: "Error occured", error: error.toString(), data: [] });
   }
 };
-
 MessagesController.updateMessages = async (req, res) => {
+  let condition = {
+    [Op.and]:
+      {id: req.params.id},
+      status: { [Op.ne]: 'deleted' }
+  };
   if (!req.params.id) {
     res
       .status(400)
@@ -503,8 +540,42 @@ MessagesController.updateMessages = async (req, res) => {
   }
 
   try {
-    let result = await Messages.update(req.body, { where: { id: req.params.id } });
-    res.status(200).send({ message: "Success", error: null, data: result });
+    console.log("before updating message");
+    req.body.read_at = Date();
+    let result = await Messages.update(req.body, { where: condition });
+    if(result ){
+      let data = await getSingleMessages(req.params.id);
+      console.warn("after updating message ", result );
+      if (data) {
+        const receiverSocketId = getUserSocketId(data.dataValues.receiverId);
+        const senderSocketId = getUserSocketId(data.dataValues.senderId);
+        console.warn("socket recerverusers ", receiverSocketId );
+        console.warn("socket senderusers ", senderSocketId );
+        if (receiverSocketId) {
+          getIo().to(receiverSocketId).emit("renew_message", {
+            message: data,
+          });
+        }
+        if (senderSocketId) {
+          getIo().to(senderSocketId).emit("renew_message", {
+            message: data,
+          });
+          
+        }
+        res.status(200).send({ message: "Success", error: null, data: data });
+      }
+      else{
+        res
+        .status(500)
+        .send({ message: "Error", error: "error while geting updated message ", data: null });
+      }
+    }
+    else{
+      res
+        .status(500)
+        .send({ message: "Error", error: "error while  updating message ", data: null });
+     
+    }
   } catch (error) {
     res
       .status(500)

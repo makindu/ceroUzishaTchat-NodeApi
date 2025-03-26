@@ -24,10 +24,14 @@ ConversationsController.messages = async (req,res)=>{
     // Pagination : Page et taille
     const page = parseInt(req.query.page) || 1; // Page actuelle
     const pageSize = parseInt(req.query.pageSize) || 10; // Messages par page
-
+let condition = {
+  [Op.and]:
+    {conversation_id: conversationId },
+    status: { [Op.ne]: 'deleted' }
+}
     // Récupération des messages avec Sequelize
     const { count, rows: messages } = await Messages.findAndCountAll({
-      where: { conversation_id: conversationId },
+      where: condition,
       order: [['createdAt', 'ASC']],
       limit: pageSize,
       offset: (page - 1) * pageSize,
@@ -130,7 +134,11 @@ ConversationsController.getData = async (req, res) => {
     const enrichedConversations = await Promise.all(data.map(async (conversation) => {
       let firstUser = null;
       let secondUser = null;
-      
+      let conditionMessage = {
+        [Op.and]:
+          {conversation_id: conversation.id },
+          status: { [Op.ne]: 'deleted' }
+      }
       if (conversation.first_user === req.body.user_id) {
         firstUser = await Users.findByPk(conversation.first_user, {
           attributes: [
@@ -162,7 +170,7 @@ ConversationsController.getData = async (req, res) => {
 
       // Récupérer le dernier message de la conversation
       const lastMessage = await Messages.findOne({
-        where: { conversation_id: conversation.id },
+        where: conditionMessage,
         order: [['createdAt', 'DESC']],
         limit: 1,
       });
@@ -198,16 +206,7 @@ ConversationsController.getData = async (req, res) => {
 ConversationsController.showOne = async (conversation_id,user_id) => {
   console.log("getting all data");
 
-  let condition = {};
-  // if (conversation_id) {
-  //   condition = {
-  //     [Op.where]: [
-  //       { id: req.body.user_id },
-  //       { second_user: req.body.user_id }
-  //     ],
-  //     status: { [Op.ne]: 'deleted' }
-  //   };
-  // }
+  
 
   try {
     const data = await Conversations.findByPk(
@@ -228,7 +227,11 @@ ConversationsController.showOne = async (conversation_id,user_id) => {
     }
       let firstUser = null;
       let secondUser = null;
-      
+      let condition = {
+        [Op.and]:
+          {conversation_id: data.id },
+          status: { [Op.ne]: 'deleted' }
+      }
       if (data.first_user === user_id) {
         firstUser = await Users.findByPk(data.first_user, {
           attributes: [
@@ -260,12 +263,12 @@ ConversationsController.showOne = async (conversation_id,user_id) => {
 
       // Récupérer le dernier message de la conversation
       const lastMessage = await Messages.findOne({
-        where: { conversation_id: data.id },
+        where: condition ,
         order: [['createdAt', 'DESC']],
         limit: 1,
       });
       const MessagesUser = await Messages.findAll({
-        where: { conversation_id: data.id },
+        where: condition,
         order: [['createdAt', 'ASC']],
       
       });
@@ -280,7 +283,7 @@ ConversationsController.showOne = async (conversation_id,user_id) => {
       const enrichedConversations =  {
         conversation: data,
         lastMessage: lastMessage ? lastMessage : null,
-        messages : MessagesUser,
+        messages : [],
         firstUser: firstUser ? firstUser : null,
         secondUser: secondUser ? secondUser : null,
         unreadMessages: unreadMessagesCount

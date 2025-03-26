@@ -2,7 +2,7 @@ const Sequelize = require("sequelize");
 const Users = require('../users/user.model');
 const Enterprises = require('../Enterprises/Enterprises.model');
 const Conversations =  require('../conversations/Conversation.model');
-const userModel = require("../users/user.model");
+// const userModel = require("../users/user.model");
 
 
 module.exports = (sequelize) => {
@@ -52,7 +52,11 @@ module.exports = (sequelize) => {
         model: Conversations,
         key: 'id',
       }
-    }
+    },
+    status: {
+      type: Sequelize.STRING,
+      allowNull: true,
+    },
   }, {
     timestamps: true,  
   });
