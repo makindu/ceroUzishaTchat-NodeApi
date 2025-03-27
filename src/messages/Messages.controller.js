@@ -1,10 +1,12 @@
 const  Messages  = require("../../db.provider").messages;
 const Conversations =  require('../../db.provider').Conversations;
+const { Users } = require("../../db.provider");
 const ConversationsControler =  require('../conversations/Conversation.controller');
 const UserControl = require('../users/user.controller');
 const getUserSocketId =  require("../../socket").getUserSocketId;
 const getIo =  require("../../socket").getIo;
 const { Op, where, json, DATE } = require("sequelize");
+const allconstant = require("../../src/constantes");
 
 const MessagesController = {};
 
@@ -110,45 +112,119 @@ MessagesController.create = async (req, res) => {
            enterprise_id: req.body.enterprise_id,
            conversation_id: getConversation.id
          };
-         const newmessage = await Messages.create(messageData);
-         if (newmessage) {
-          const receiverSocketId = getUserSocketId(req.body.receiverId);
-          const senderSocketId = getUserSocketId(req.body.user_id);
+         if( req.body.message_id ){
+          console.log("herer i respond to any message");
           // console.log("before emiting",receiverSocketId);
-              if (receiverSocketId) {
-                try {
-                  console.log("before emiting",receiverSocketId);
+          const messageResponded = await Messages.findByPk( parseInt(req.body.message_id));
+          if (messageResponded) {
+            
+             messageData.ResponseId = req.body.message_id;
+             const newmessage = await Messages.create(messageData);
+          if (newmessage) {
+
+            const message = await Messages.findByPk(newmessage.id, {
+              include: [
+                {
+                  model: Messages,
+                  as: 'responseFrom', // L'alias défini dans belongsTo
+                },
+                {
+                  model: Users,
+                  as: 'receiver', 
+                  attributes : allconstant.Userattributes,
+                },
+                {
+                  model: Users,
+                  as: 'sender', 
+                  attributes : allconstant.Userattributes,
+                },
+              ],
+            });
+            // const sender = UserControl.show(message.senderId);
+            // const receiver = UserControl.show(message.receiverId);
+           const receiverSocketId = getUserSocketId(req.body.receiverId);
+           const senderSocketId = getUserSocketId(req.body.user_id);
+           // console.log("before emiting",receiverSocketId);
+          
+               if (receiverSocketId) {
+                 try {
+                   console.log("before emiting",receiverSocketId);
+                   
+                 const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+                  message:message,
+                   });
+                   console.log("after emiting",socketMessage);
+                 } catch (error) {
+                   console.log("error emiting new message",error.toString());
+                 }
+               }
+ 
+               if (senderSocketId) {
+                 try {
+                   console.log("before emiting",senderSocketId);
+                   
+                 const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+                  message:message,
                   
-                const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
-                    message: newmessage,
-                  });
-                  console.log("after emiting",socketMessage);
-                } catch (error) {
-                  console.log("error emiting new message",error.toString());
-                }
-              }
+                   });
+                   console.log("after emiting",socketMessage);
+                 } catch (error) {
+                   console.log("error emiting new message",error.toString());
+                 }
+               }
+ 
+            res.status(200).send({ status: 200, message: "Success", error: null, data: message });
+            return;
+          }
+          else{
+            res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
+ 
+            return 
+          }
+           }
 
-              if (senderSocketId) {
-                try {
-                  console.log("before emiting",senderSocketId);
-                  
-                const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
-                    message: newmessage,
-                  });
-                  console.log("after emiting",socketMessage);
-                } catch (error) {
-                  console.log("error emiting new message",error.toString());
-                }
-              }
-
-           res.status(200).send({ status: 200, message: "Success", error: null, data: newmessage });
-           return;
+         }else{
+          const newmessage = await Messages.create(messageData);
+          if (newmessage) {
+           const receiverSocketId = getUserSocketId(req.body.receiverId);
+           const senderSocketId = getUserSocketId(req.body.user_id);
+           // console.log("before emiting",receiverSocketId);
+               if (receiverSocketId) {
+                 try {
+                   console.log("before emiting",receiverSocketId);
+                   
+                 const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+                     message: newmessage,
+                   });
+                   console.log("after emiting",socketMessage);
+                 } catch (error) {
+                   console.log("error emiting new message",error.toString());
+                 }
+               }
+ 
+               if (senderSocketId) {
+                 try {
+                   console.log("before emiting",senderSocketId);
+                   
+                 const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+                     message: newmessage,
+                   });
+                   console.log("after emiting",socketMessage);
+                 } catch (error) {
+                   console.log("error emiting new message",error.toString());
+                 }
+               }
+ 
+            res.status(200).send({ status: 200, message: "Success", error: null, data: newmessage });
+            return;
+          }
+          else{
+            res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
+ 
+            return 
+          }
          }
-         else{
-           res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
-
-           return 
-         }
+        
 
        } else {
          return res.status(500).send({ message: "error", error: "error while getting conversation", data: null });
@@ -178,12 +254,12 @@ MessagesController.createMedia = async (req, res) => {
 
     // Attendre la résolution de toutes les promesses
     const messageData = await Promise.all(messagePromises);
-
+console.log("Element retuning whwen multiple medias sent", messageData);
     res.status(200).send({
       status: 200,
       message: "Success",
       error: null,
-      data: messageData.filter((msg) => msg != null), // Éliminer les messages null
+      data: messageData.filter((msg) => msg != null), 
     });
   } catch (error) {
     res.status(500).send({
@@ -293,6 +369,78 @@ MessagesController.createMedia = async (req, res) => {
             enterprise_id: element.enterprise_id,
             conversation_id: getConversation.id
           };
+          if( element.message_id ){
+            console.log("herer i respond to any message");
+            // console.log("before emiting",receiverSocketId);
+            const messageResponded = await Messages.findByPk( parseInt(element.message_id));
+            if (messageResponded) {
+              
+               messageData.ResponseId = element.message_id;
+               const newmessage = await Messages.create(messageData);
+            if (newmessage) {
+  
+              const message = await Messages.findByPk(newmessage.id, {
+                include: [
+                  {
+                    model: Messages,
+                    as: 'responseFrom', // L'alias défini dans belongsTo
+                  },
+                  {
+                    model: Users,
+                    as: 'receiver', 
+                    attributes : allconstant.Userattributes,
+                  },
+                  {
+                    model: Users,
+                    as: 'sender', 
+                    attributes : allconstant.Userattributes,
+                  },
+                ],
+              });
+              // const sender = UserControl.show(message.senderId);
+              // const receiver = UserControl.show(message.receiverId);
+             const receiverSocketId = getUserSocketId(element.receiverId);
+             const senderSocketId = getUserSocketId(element.user_id);
+             // console.log("before emiting",receiverSocketId);
+            
+                 if (receiverSocketId) {
+                   try {
+                     console.log("before emiting",receiverSocketId);
+                     
+                   const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+                    message:message,
+                     });
+                     console.log("after emiting",socketMessage);
+                   } catch (error) {
+                     console.log("error emiting new message",error.toString());
+                   }
+                 }
+   
+                 if (senderSocketId) {
+                   try {
+                     console.log("before emiting",senderSocketId);
+                     
+                   const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+                    message:message,
+                    
+                     });
+                     console.log("after emiting",socketMessage);
+                   } catch (error) {
+                     console.log("error emiting new message",error.toString());
+                   }
+                 }
+   
+              res.status(200).send({ status: 200, message: "Success", error: null, data: message });
+              return;
+            }
+            else{
+              res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
+   
+              return 
+            }
+             }
+  
+           }else{
           const newmessage = await Messages.create(messageData);
           if (newmessage) {
            const receiverSocketId = getUserSocketId(element.receiverId);
@@ -332,10 +480,8 @@ MessagesController.createMedia = async (req, res) => {
           }
           else{
             return;
-            // res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
- 
-            return 
           }
+        }
  
         } else {
       return;
@@ -376,6 +522,7 @@ MessagesController.getData = async (req, res) => {
       .send({ message: "Error occured", error: error.toString(), data: [] });
   }
 };
+
 MessagesController.getMessagesByConversation = async (req, res) => {
   console.log("getting all data"+req.body.conversation_id)
   let conditionMessage = {
@@ -518,7 +665,22 @@ MessagesController.findByPk = async (req, res) => {
   }
   try {
     const data = await Messages.findByPk(
-      parseInt(req.params.id));
+      parseInt(req.params.id),
+     { 
+      include  : [
+        {
+          model: Users,
+          as: 'receiver', 
+          attributes : allconstant.Userattributes,
+        },
+        {
+          model: Users,
+          as: 'sender', 
+          attributes : allconstant.Userattributes,
+        },
+      ]
+     }
+    );
     res.status(200).send({ message: "Success", error: null, data: data });
   } catch (error) {
     res

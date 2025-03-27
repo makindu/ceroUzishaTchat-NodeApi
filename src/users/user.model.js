@@ -1,5 +1,5 @@
 const Sequelize = require("sequelize");
-
+const Messages =  require("../../db.provider").messages;
 module.exports = (sequelize) => {
   const Users = sequelize.define("users", {
     id:{
@@ -27,7 +27,7 @@ module.exports = (sequelize) => {
     },
 
     user_phone :{
-      type: Sequelize.NUMBER,
+      type: Sequelize.STRING,
       allowNull: true
     },
 
@@ -88,5 +88,7 @@ module.exports = (sequelize) => {
     
   });
   { timestamps: true}
+  // Users.belongsTo(Messages, { foreignKey: 'receiverId', as: 'receiver' });
+
   return Users;
 };

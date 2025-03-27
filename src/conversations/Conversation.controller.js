@@ -31,6 +31,12 @@ let condition = {
 }
     // Récupération des messages avec Sequelize
     const { count, rows: messages } = await Messages.findAndCountAll({
+      include : [
+        {
+          model: Messages,
+          as: 'responseFrom', // L'alias défini dans belongsTo
+        },
+      ],
       where: condition,
       order: [['createdAt', 'ASC']],
       limit: pageSize,

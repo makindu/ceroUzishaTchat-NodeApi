@@ -65,7 +65,7 @@ const IO = socket.initializeSocket(server); // Initialiser Socket.IO
 
 app.use("/api", require("./index.route"));
 
-DBConnection.connection.sync().then(() => {
+DBConnection.connection.sync({ alter: false, }).then(() => {
   console.log("Database connected");
 });
 

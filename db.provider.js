@@ -1,4 +1,4 @@
-const Sequelize = require("sequelize");
+const { Sequelize } = require("sequelize");
 const DBConfig = require("./db_config");
 
 const sequelize = new Sequelize(
@@ -8,15 +8,28 @@ const sequelize = new Sequelize(
   {
     host: DBConfig.host,
     dialect: DBConfig.dialect,
+    logging: false,
   }
 );
 
-let database = {};
+// Importer les modèles
+const Users = require("./src/users/user.model")(sequelize);
+const messages = require("./src/messages/messages.model")(sequelize);
+const Enterprises = require("./src/Enterprises/Enterprises.model")(sequelize);
+const Conversations = require("./src/conversations/Conversation.model")(sequelize);
 
-database.connection = sequelize;
-database.Users = require("./src/users/user.model")(sequelize);
-database.messages = require("./src/messages/Messages.model")(sequelize);
-database.Conversations = require("./src/conversations/Conversation.model")(sequelize);
-database.enterprises =  require('./src/Enterprises/Enterprises.model')(sequelize);
-database.libraries =  require('./src/libraries/libraries.model')(sequelize);
-module.exports = database;
+// Définir les relations
+Users.hasMany(messages, { foreignKey: "senderId", as: "sentMessages" });
+Users.hasMany(messages, { foreignKey: "receiverId", as: "receivedMessages" });
+messages.belongsTo(Users, { foreignKey: "senderId", as: "sender" });
+messages.belongsTo(Users, { foreignKey: "receiverId", as: "receiver" });
+messages.belongsTo(messages, { as: "responseFrom", foreignKey: "ResponseId" });
+
+// Exporter l'objet de connexion et les modèles
+module.exports = {
+  connection: sequelize,
+  Users,
+  messages,
+  Enterprises,
+  Conversations,
+};

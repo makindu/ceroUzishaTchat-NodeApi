@@ -22,14 +22,14 @@ module.exports = (sequelize) => {
       allowNull: true,
     },
     senderId: {
-      type: Sequelize.INTEGER,
+      type: Sequelize.BIGINT(20),
       references: {
         model: Users,
         key: 'id',
       }
     },
     receiverId: {
-      type: Sequelize.INTEGER,
+      type: Sequelize.BIGINT(20),
       references: {
         model: Users,
         key: 'id',
@@ -57,14 +57,25 @@ module.exports = (sequelize) => {
       type: Sequelize.STRING,
       allowNull: true,
     },
+    ResponseId:
+      {
+        type: Sequelize.BIGINT(20),
+        allowNull: true,
+        references: {
+          model: 'messages', 
+          key: 'id',
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+     }
   }, {
     timestamps: true,  
   });
 
+  // Messages.belongsTo(Messages, { as: 'responseFrom', foreignKey: 'ResponseId' });
   // Users.hasMany (Messages, { foreignKey: 'senderId', as: 'sender' });
   // Users.hasMany(Messages, { foreignKey: 'receiverId', as: 'receiver' });
   // Messages.belongsTo(Users, { foreignKey: 'senderId', as: 'sender' });
-  // Messages.belongsTo(Users, { foreignKey: 'receiverId', as: 'receiver' });
 
   return Messages;
 };
