@@ -7,6 +7,7 @@ const getUserSocketId =  require("../../socket").getUserSocketId;
 const getIo =  require("../../socket").getIo;
 const { Op, where, json, DATE } = require("sequelize");
 const allconstant = require("../../src/constantes");
+const { all } = require("./Messages.route");
 
 const MessagesController = {};
 
@@ -58,7 +59,11 @@ MessagesController.create = async (req, res) => {
          };
         
           // Enregistrer le message
-         const newmessage =  await Messages.create(messageData);
+         const newmessage =  await Messages.create(messageData,{
+          returning: allconstant.messageattributes,
+
+
+         });
          const receiverSocketId = getUserSocketId(req.body.receiverId);
          const senderSocketId = getUserSocketId(req.body.user_id);
          // console.log("before emiting",receiverSocketId);
@@ -115,11 +120,17 @@ MessagesController.create = async (req, res) => {
          if( req.body.message_id ){
           console.log("herer i respond to any message");
           // console.log("before emiting",receiverSocketId);
-          const messageResponded = await Messages.findByPk( parseInt(req.body.message_id));
+          const messageResponded = await Messages.findByPk( parseInt(req.body.message_id,{
+            attributes : allconstant.messageattributes,
+
+          }));
           if (messageResponded) {
             
              messageData.ResponseId = req.body.message_id;
-             const newmessage = await Messages.create(messageData);
+             const newmessage = await Messages.create(messageData,{
+              returning: allconstant.messageattributes,
+
+             });
           if (newmessage) {
 
             const message = await Messages.findByPk(newmessage.id, {
@@ -127,6 +138,7 @@ MessagesController.create = async (req, res) => {
                 {
                   model: Messages,
                   as: 'responseFrom', // L'alias défini dans belongsTo
+                  attributes : allconstant.messageattributes,
                 },
                 {
                   model: Users,
@@ -184,17 +196,20 @@ MessagesController.create = async (req, res) => {
            }
 
          }else{
-          const newmessage = await Messages.create(messageData);
+          const newmessage = await Messages.create(messageData, {
+            returning: allconstant.messageattributes,
+          });
           if (newmessage) {
            const receiverSocketId = getUserSocketId(req.body.receiverId);
            const senderSocketId = getUserSocketId(req.body.user_id);
-           // console.log("before emiting",receiverSocketId);
+           const message = getSingleMessages(newmessage.dataValues.id);
+           console.log("before emiting",newmessage);
                if (receiverSocketId) {
                  try {
                    console.log("before emiting",receiverSocketId);
                    
                  const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
-                     message: newmessage,
+                     message: message,
                    });
                    console.log("after emiting",socketMessage);
                  } catch (error) {
@@ -207,7 +222,7 @@ MessagesController.create = async (req, res) => {
                    console.log("before emiting",senderSocketId);
                    
                  const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
-                     message: newmessage,
+                     message: message,
                    });
                    console.log("after emiting",socketMessage);
                  } catch (error) {
@@ -215,7 +230,7 @@ MessagesController.create = async (req, res) => {
                  }
                }
  
-            res.status(200).send({ status: 200, message: "Success", error: null, data: newmessage });
+            res.status(200).send({ status: 200, message: "Success", error: null, data: message });
             return;
           }
           else{
@@ -268,7 +283,6 @@ console.log("Element retuning whwen multiple medias sent", messageData);
       data: null,
     });
   }
- 
  }
 
  };
@@ -351,9 +365,10 @@ console.log("Element retuning whwen multiple medias sent", messageData);
       } else {
       
         if (!element.conversation_id || element.conversation_id === '' ) {
-          element.conversation_id = conversationExist[0].id;
+          console.log("conversation found ", conversationExist);
+          element.conversation_id = conversationExist.dataValues.id;
           //  res.status(200).send({ message: "error", error: "conversation identification failed", data: null });
-           return;
+          //  return;
         }
  
         const getConversation = await Conversations.findByPk(parseInt(conversationExist.dataValues.id));
@@ -374,7 +389,6 @@ console.log("Element retuning whwen multiple medias sent", messageData);
             // console.log("before emiting",receiverSocketId);
             const messageResponded = await Messages.findByPk( parseInt(element.message_id));
             if (messageResponded) {
-              
                messageData.ResponseId = element.message_id;
                const newmessage = await Messages.create(messageData);
             if (newmessage) {
@@ -397,12 +411,9 @@ console.log("Element retuning whwen multiple medias sent", messageData);
                   },
                 ],
               });
-              // const sender = UserControl.show(message.senderId);
-              // const receiver = UserControl.show(message.receiverId);
+           JSON.stringify(message.responseFrom.medias);
              const receiverSocketId = getUserSocketId(element.receiverId);
              const senderSocketId = getUserSocketId(element.user_id);
-             // console.log("before emiting",receiverSocketId);
-            
                  if (receiverSocketId) {
                    try {
                      console.log("before emiting",receiverSocketId);
@@ -441,7 +452,9 @@ console.log("Element retuning whwen multiple medias sent", messageData);
              }
   
            }else{
-          const newmessage = await Messages.create(messageData);
+          const newmessage = await Messages.create(messageData,{
+            returning :  allconstant.messageattributes
+          } );
           if (newmessage) {
            const receiverSocketId = getUserSocketId(element.receiverId);
            const senderSocketId = getUserSocketId(element.user_id);
@@ -498,7 +511,9 @@ console.log("Element retuning whwen multiple medias sent", messageData);
       // });
     }
  }
-
+createMesage = async (messageData)=>{
+    
+};
 MessagesController.getData = async (req, res) => {
   console.log("getting all data")
   let conditionMessage = {
@@ -638,7 +653,9 @@ getSingleMessages = async (id) => {
   }
   try {
     const data = await Messages.findByPk(
-      parseInt(id));
+      parseInt(id),{
+        attributes : allconstant.messageattributes
+      } );
       let  dataParsed = JSON.parse(data.medias); 
         data.medias = dataParsed;
          
