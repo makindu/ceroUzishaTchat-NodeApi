@@ -5,7 +5,7 @@ allconstant.Userattributes =  [
     'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
   ];
 allconstant.messageattributes = [
-  'id',
+'id',
 'content',
 'medias',
 'senderId',
@@ -15,5 +15,5 @@ allconstant.messageattributes = [
 'conversation_id',
 'status',
 'ResponseId'
-]
+];
 module.exports =  allconstant;

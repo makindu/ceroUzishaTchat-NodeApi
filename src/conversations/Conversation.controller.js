@@ -54,6 +54,9 @@ let condition = {
 let  medias = await Promise.all( messages.map((message)=>{
     const media =   JSON.parse(message.medias); 
     message.medias = media;
+    if (message.responseFrom) {
+      message.responseFrom.medias=JSON.parse(message.responseFrom.medias);
+    }
       return message;
     }));
     res.json({
