@@ -1,20 +1,17 @@
 const Sequelize = require("sequelize");
 const Users = require('../users/user.model');
 const Enterprises = require('../Enterprises/Enterprises.model');
-const Conversations =  require('../conversations/Conversation.model');
-// const userModel = require("../users/user.model");
-
+const Conversations = require('../conversations/Conversation.model');
 
 module.exports = (sequelize) => {
   const Messages = sequelize.define("messages", {
-
     id: {
       type: Sequelize.INTEGER,
       primaryKey: true,
       autoIncrement: true,
     },
     content: {
-      type: Sequelize.TEXT,  // Si c'est un texte
+      type: Sequelize.TEXT,
       allowNull: true,
     },
     medias: {
@@ -35,9 +32,9 @@ module.exports = (sequelize) => {
         key: 'id',
       }
     },
-    read_at:{
+    read_at: {
       type: Sequelize.DATE,
-      allowNull:true,
+      allowNull: true,
     },
     enterprise_id: {
       type: Sequelize.BIGINT(20).UNSIGNED,
@@ -57,25 +54,24 @@ module.exports = (sequelize) => {
       type: Sequelize.STRING,
       allowNull: true,
     },
-    ResponseId:
-      {
-        type: Sequelize.BIGINT(20),
-        allowNull: true,
-        references: {
-          model: 'messages', 
-          key: 'id',
-        },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL',
-     }
+    ResponseId: {
+      type: Sequelize.BIGINT(20),
+      allowNull: true,
+      references: {
+        model: 'messages', 
+        key: 'id',
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL',
+    },
+    forwarded: {
+      type: Sequelize.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    }
   }, {
-    timestamps: true,  
+    timestamps: true,
   });
-
-  // Messages.belongsTo(Messages, { as: 'responseFrom', foreignKey: 'ResponseId' });
-  // Users.hasMany (Messages, { foreignKey: 'senderId', as: 'sender' });
-  // Users.hasMany(Messages, { foreignKey: 'receiverId', as: 'receiver' });
-  // Messages.belongsTo(Users, { foreignKey: 'senderId', as: 'sender' });
 
   return Messages;
 };

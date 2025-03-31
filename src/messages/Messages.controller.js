@@ -55,7 +55,8 @@ MessagesController.create = async (req, res) => {
            senderId: req.body.user_id,
            receiverId: req.body.receiverId,
            enterprise_id: req.body.enterprise_id,
-           conversation_id: newConversation.dataValues.id
+           conversation_id: newConversation.dataValues.id,
+           forwarded:req.body.forwarded
          };
         
           // Enregistrer le message
@@ -115,7 +116,8 @@ MessagesController.create = async (req, res) => {
            senderId: req.body.user_id,
            receiverId: req.body.receiverId,
            enterprise_id: req.body.enterprise_id,
-           conversation_id: getConversation.id
+           conversation_id: getConversation.id,
+           forwarded:req.body.forwarded
          };
          if( req.body.message_id ){
           console.log("herer i respond to any message");
@@ -321,7 +323,8 @@ console.log("Element retuning whwen multiple medias sent", messageData);
             senderId: element.user_id,
             receiverId: element.receiverId,
             enterprise_id: element.enterprise_id,
-            conversation_id: newConversation.dataValues.id
+            conversation_id: newConversation.dataValues.id,
+            forwarded:element.forwarded
           };
          
           
@@ -382,7 +385,8 @@ console.log("Element retuning whwen multiple medias sent", messageData);
             senderId: element.user_id,
             receiverId: element.receiverId,
             enterprise_id: element.enterprise_id,
-            conversation_id: getConversation.id
+            conversation_id: getConversation.id,
+            forwarded:element.forwarded
           };
           if( element.message_id ){
             console.log("herer i respond to any message");
