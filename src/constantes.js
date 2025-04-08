@@ -16,4 +16,21 @@ allconstant.messageattributes = [
 'status',
 'ResponseId'
 ];
+allconstant.mentionsattribute =  [
+  
+'id',
+'message_id',
+'mentioned_user_id',
+];
+allconstant.refeencesattribute = [
+'id',
+'message_id',
+'reference_type',
+'reference_code',
+]
+allconstant.capitalizeFirstLetter = (input) => {
+  if (!input) return '';
+  const string = String(input);
+  return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+};
 module.exports =  allconstant;

@@ -1,14 +1,17 @@
-const  Messages  = require("../../db.provider").messages;
-const Conversations =  require('../../db.provider').Conversations;
-const { Users } = require("../../db.provider");
+const  Users = require("../../db.provider").Users;
+const Messages = require("../../db.provider").messages;
+const Conversations= require("../../db.provider").Conversations;
+const messageReference = require("../../db.provider").messageReference;
+const messageMention  = require("../../db.provider").messageMention;
 const ConversationsControler =  require('../conversations/Conversation.controller');
 const UserControl = require('../users/user.controller');
 const getUserSocketId =  require("../../socket").getUserSocketId;
 const getIo =  require("../../socket").getIo;
-const { Op, where, json, DATE } = require("sequelize");
+const messageMentionController = require('../messageMention/message.mention.controller');
+const messageReferenceController =  require('../MessageReference/message.reference.controller');
+const { Op } = require("sequelize");
 const allconstant = require("../../src/constantes");
-const { all } = require("./Messages.route");
-
+const { Compressor } = require("mongodb");
 const MessagesController = {};
 
 MessagesController.create = async (req, res) => {
@@ -22,240 +25,25 @@ MessagesController.create = async (req, res) => {
      return;
    }
 
-   const condition = {
-     [Op.or]: [
-       { first_user: req.body.user_id ,
-        second_user: req.body.receiverId },
-       
-       { first_user: req.body.receiverId ,
-        second_user: req.body.user_id },
-     ]
-   };
-
-   let conversationExist = {};
-   let messageData = {};
-
-   try {
-     conversationExist = await Conversations.findOne({ where: condition });
-
-     if (!conversationExist) {
-       console.log("this convesation is newer i.e it's not exist at last");
-       const conversationData = {
-         first_user: req.body.user_id,
-         second_user: req.body.receiverId,
-         enterprise_id: req.body.enterprise_id
-       };
-
-       let newConversation = await Conversations.create(conversationData);
-      
-       if (newConversation) {
-         messageData = {
-           content: req.body.content,
-           medias: req.body.medias,
-           senderId: req.body.user_id,
-           receiverId: req.body.receiverId,
-           enterprise_id: req.body.enterprise_id,
-           conversation_id: newConversation.dataValues.id,
-           forwarded:req.body.forwarded
-         };
-        
-          // Enregistrer le message
-         const newmessage =  await Messages.create(messageData,{
-          returning: allconstant.messageattributes,
-
-
-         });
-         const receiverSocketId = getUserSocketId(req.body.receiverId);
-         const senderSocketId = getUserSocketId(req.body.user_id);
-         // console.log("before emiting",receiverSocketId);
-         if (senderSocketId) {
-            try {
-              console.log("before emiting new conversation to sender",senderSocketId);
-              const socketConvesation =  getIo().to(senderSocketId).emit("new_conversation", {
-                conversation:await ConversationsControler.showOne(newConversation.dataValues.id,req.body.user_id)
-              });
-              console.log("after emiting new conversation to sender",socketConvesation);
-            } catch (error) {
-              console.log("error emiting new conversation to sender",error.toString());
-            }
-         }
-          if (receiverSocketId) {
-          try {
-            console.log("before emiting new conversation to receiver",receiverSocketId);
-            const socketConvesation =  getIo().to(receiverSocketId).emit("new_conversation", {
-                conversation:await ConversationsControler.showOne(newConversation.dataValues.id,req.body.receiverId)
-              });
-            console.log("after emiting new conversation to receiver",socketConvesation);
-          } catch (error) {
-            console.log("error emiting new conversation to receiver",error.toString());
-          }
-          
-          }
-         
-         return res.status(200).send({ message: "Success", error: null, data: newmessage });
-
-       } else {
-         return res.status(200).send({ message: "error occurred", error: "error while creating conversation", data: null });
-       }
-     } else {
-     
-       if (!req.body.conversation_id || req.body.conversation_id === '' ) {
-          req.body.conversation_id = conversationExist[0].id;
-          res.status(200).send({ message: "error", error: "conversation identification failed", data: null });
-          return;
-       }
-
-       const getConversation = await Conversations.findByPk(parseInt(conversationExist.dataValues.id));
-
-       if (getConversation) {
-       console.log("this convesation is exist i.e it's  exist at past");
-
-         messageData = {
-           content: req.body.content,
-           medias: req.body.medias,
-           senderId: req.body.user_id,
-           receiverId: req.body.receiverId,
-           enterprise_id: req.body.enterprise_id,
-           conversation_id: getConversation.id,
-           forwarded:req.body.forwarded
-         };
-         if( req.body.message_id ){
-          console.log("herer i respond to any message");
-          // console.log("before emiting",receiverSocketId);
-          const messageResponded = await Messages.findByPk( parseInt(req.body.message_id,{
-            attributes : allconstant.messageattributes,
-
-          }));
-          if (messageResponded) {
-            
-             messageData.ResponseId = req.body.message_id;
-             const newmessage = await Messages.create(messageData,{
-              returning: allconstant.messageattributes,
-
-             });
-          if (newmessage) {
-
-            const message = await Messages.findByPk(newmessage.id, {
-              include: [
-                {
-                  model: Messages,
-                  as: 'responseFrom', // L'alias défini dans belongsTo
-                  attributes : allconstant.messageattributes,
-                },
-                {
-                  model: Users,
-                  as: 'receiver', 
-                  attributes : allconstant.Userattributes,
-                },
-                {
-                  model: Users,
-                  as: 'sender', 
-                  attributes : allconstant.Userattributes,
-                },
-              ],
-            });
-            // const sender = UserControl.show(message.senderId);
-            // const receiver = UserControl.show(message.receiverId);
-           const receiverSocketId = getUserSocketId(req.body.receiverId);
-           const senderSocketId = getUserSocketId(req.body.user_id);
-           // console.log("before emiting",receiverSocketId);
-          
-               if (receiverSocketId) {
-                 try {
-                   console.log("before emiting",receiverSocketId);
-                   
-                 const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
-                  message:message,
-                   });
-                   console.log("after emiting",socketMessage);
-                 } catch (error) {
-                   console.log("error emiting new message",error.toString());
-                 }
-               }
- 
-               if (senderSocketId) {
-                 try {
-                   console.log("before emiting",senderSocketId);
-                   
-                 const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
-                  message:message,
-                  
-                   });
-                   console.log("after emiting",socketMessage);
-                 } catch (error) {
-                   console.log("error emiting new message",error.toString());
-                 }
-               }
- 
-            res.status(200).send({ status: 200, message: "Success", error: null, data: message });
-            return;
-          }
-          else{
-            res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
- 
-            return 
-          }
-           }
-
-         }else{
-          const newmessage = await Messages.create(messageData, {
-            returning: allconstant.messageattributes,
-          });
-          if (newmessage) {
-           const receiverSocketId = getUserSocketId(req.body.receiverId);
-           const senderSocketId = getUserSocketId(req.body.user_id);
-           const message = getSingleMessages(newmessage.dataValues.id);
-           console.log("before emiting",newmessage);
-               if (receiverSocketId) {
-                 try {
-                   console.log("before emiting",receiverSocketId);
-                   
-                 const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
-                     message: message,
-                   });
-                   console.log("after emiting",socketMessage);
-                 } catch (error) {
-                   console.log("error emiting new message",error.toString());
-                 }
-               }
- 
-               if (senderSocketId) {
-                 try {
-                   console.log("before emiting",senderSocketId);
-                   
-                 const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
-                     message: message,
-                   });
-                   console.log("after emiting",socketMessage);
-                 } catch (error) {
-                   console.log("error emiting new message",error.toString());
-                 }
-               }
- 
-            res.status(200).send({ status: 200, message: "Success", error: null, data: message });
-            return;
-          }
-          else{
-            res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
- 
-            return 
-          }
-         }
-        
-
-       } else {
-         return res.status(500).send({ message: "error", error: "error while getting conversation", data: null });
-       }
-     }
-
-   } catch (error) {
-     res.status(500).send({
-       message: "Error occurred",
-       error: error.toString(),
-       data: null,
-     });
-   }
- };
+  
+try{
+   
+ let result = await MessageSendOne(req.body);
+return res.status(200).send({
+  message: "success",
+  error: null,
+  data: result,
+});
+// return;
+} catch (error) {
+  res.status(500).send({
+         message: "Error occurred",
+         error: error.toString(),
+         data: null,
+       });
+      return;
+ }
+};
 MessagesController.createMedia = async (req, res) => {
  if (!req.body.data) {
    res.status(400).send("data is empty ensure that data contain anything");
@@ -266,7 +54,7 @@ MessagesController.createMedia = async (req, res) => {
   try {
     // Utiliser map pour créer un tableau de promesses
     const messagePromises = req.body.data.map(async (element) => {
-      return await multipleMediaBuilt(element);
+      return await MessageSendOne(element);
     });
 
     // Attendre la résolution de toutes les promesses
@@ -288,8 +76,9 @@ console.log("Element retuning whwen multiple medias sent", messageData);
  }
 
  };
-   multipleMediaBuilt =  async (element)=>{
+   MessageSendOne =  async (element)=>{
 
+    console.log("in");
     const condition = {
       [Op.or]: [
         { first_user: element.user_id ,
@@ -302,9 +91,16 @@ console.log("Element retuning whwen multiple medias sent", messageData);
  
     let conversationExist = {};
     let messageData = {};
- 
+    let messagewhithNentionAndReferences;
+    // const   = await sequelize. ();
+    
     try {
-      conversationExist = await Conversations.findOne({ where: condition });
+    //  let  usersList = await UserControl.getEnabledUsersByEnterprise(element.enterprise_id);
+     console.log("pass");
+    //  let { mentions, references } = await extractMentionsAndReferences(element.content, usersList.data);
+    //  console.log("list mentions" ,mentions);
+    //  console.log("list references" ,references);
+     conversationExist = await Conversations.findOne({ where: condition });
  
       if (!conversationExist) {
         console.log("this convesation is newer i.e it's not exist at last");
@@ -314,7 +110,7 @@ console.log("Element retuning whwen multiple medias sent", messageData);
           enterprise_id: element.enterprise_id
         };
  
-        let newConversation = await Conversations.create(conversationData);
+        let newConversation = await Conversations.create(conversationData,{ });
        
         if (newConversation) {
           messageData = {
@@ -329,11 +125,54 @@ console.log("Element retuning whwen multiple medias sent", messageData);
          
           
            // Enregistrer le message
-          const newmessage =  await Messages.create(messageData);
+           console.log("before ");
+           const newmessage =  await Messages.create(messageData,{
+             returning :  allconstant.messageattributes,  
+            } );
+            console.log("after ");
           const receiverSocketId = getUserSocketId(element.receiverId);
           const senderSocketId = getUserSocketId(element.user_id);
-          // console.log("before emiting",receiverSocketId);
-          if (senderSocketId) {
+         if(newmessage){
+          // let message_id =  newmessage.data.id;
+          if (element.mentions) {
+            await Promise.all(
+              element.mentions.map(async (mention) => {
+                try {
+                  let mentionsData = {
+                    message_id	: newmessage.id,
+                    mentioned_user_id : mention
+                  };
+                  return await messageMention.create(mentionsData,{ });
+                } catch (error) {
+                  console.error("Erreur lors de la création d'une mention :", error);
+                }
+              })
+            );
+            // for (let userId of mentions) {
+            // }
+          }
+          if (element.references) {
+            console.log("biginig  refeentement");
+            await messageReferenceController.createMany(element.references,newmessage.id);
+            console.log("befor  refeentement");
+
+            // await Promise.all(
+            //   element.references.map(async (reference) => {
+            //     try {
+            //       let referencesData = {
+            //         message_id: newmessage.id,
+            //         reference_type: reference.reference_type, 
+            //         reference_code: reference.reference_code	
+            //       };
+            //       return await messageReference.create(referencesData,{ });
+            //     } catch (error) {
+            //       console.error("Erreur lors de la création d'une référence :", error);
+            //     }
+            //   })
+            // );
+            
+          }
+           if (senderSocketId) {
              try {
                console.log("before emiting new conversation to sender",senderSocketId);
                const socketConvesation =  getIo().to(senderSocketId).emit("new_conversation", {
@@ -356,10 +195,13 @@ console.log("Element retuning whwen multiple medias sent", messageData);
            }
            
            }
-           JSON.stringify(newmessage.medias);
-          return  newmessage ;
+           JSON.parse(newmessage.medias);
+           messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(newmessage.id);
+           console.log("in building ", messagewhithNentionAndReferences);
+       JSON.parse(messagewhithNentionAndReferences.medias);
+           return messagewhithNentionAndReferences;
           // return res.status(200).send({ message: "Success", error: null, data: newmessage });
- 
+          }
         } else {
 
           return;
@@ -369,7 +211,7 @@ console.log("Element retuning whwen multiple medias sent", messageData);
       
         if (!element.conversation_id || element.conversation_id === '' ) {
           console.log("conversation found ", conversationExist);
-          element.conversation_id = conversationExist.dataValues.id;
+          element.conversation_id = conversationExist.id;
           //  res.status(200).send({ message: "error", error: "conversation identification failed", data: null });
           //  return;
         }
@@ -394,9 +236,11 @@ console.log("Element retuning whwen multiple medias sent", messageData);
             const messageResponded = await Messages.findByPk( parseInt(element.message_id));
             if (messageResponded) {
                messageData.ResponseId = element.message_id;
-               const newmessage = await Messages.create(messageData);
+               const newmessage =  await Messages.create(messageData,{
+                returning :  allconstant.messageattributes, 
+              } );
             if (newmessage) {
-  
+                
               const message = await Messages.findByPk(newmessage.id, {
                 include: [
                   {
@@ -415,85 +259,197 @@ console.log("Element retuning whwen multiple medias sent", messageData);
                   },
                 ],
               });
-           JSON.stringify(message.responseFrom.medias);
+           JSON.parse(message.responseFrom.medias);
              const receiverSocketId = getUserSocketId(element.receiverId);
              const senderSocketId = getUserSocketId(element.user_id);
-                 if (receiverSocketId) {
-                   try {
-                     console.log("before emiting",receiverSocketId);
-                     
-                   const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
-                    message:message,
-                     });
-                     console.log("after emiting",socketMessage);
-                   } catch (error) {
-                     console.log("error emiting new message",error.toString());
-                   }
-                 }
-   
-                 if (senderSocketId) {
-                   try {
-                     console.log("before emiting",senderSocketId);
-                     
-                   const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
-                    message:message,
-                    
-                     });
-                     console.log("after emiting",socketMessage);
-                   } catch (error) {
-                     console.log("error emiting new message",error.toString());
-                   }
-                 }
-   
-              res.status(200).send({ status: 200, message: "Success", error: null, data: message });
-              return;
+             if (element.mentions) {
+              await Promise.all(
+                element.mentions.map(async (mention) => {
+                  try {
+                    let mentionsData = {
+                      message_id	: newmessage.id,
+                      mentioned_user_id : mention
+                    };
+                    return await messageMention.create(mentionsData);
+                  } catch (error) {
+                    console.error("Erreur lors de la création d'une mention :", error);
+                  }
+                })
+              );
+              // for (let userId of mentions) {
+              // }
+            }
+            if (element.references) {
+              console.log("biginig  refeentement");
+            await messageReferenceController.createMany(element.references,newmessage.id);
+            console.log("befor  refeentement");
+              // await Promise.all(
+              //   element.references.map(async (reference) => {
+              //     try {
+              //       let referencesData = {
+              //         message_id: newmessage.id,
+              //         reference_type: reference.reference_type, 
+              //       reference_code: reference.reference_code
+              //       };
+              //       return await messageReference.create(referencesData,{ });
+              //     } catch (error) {
+              //       console.error("Erreur lors de la création d'une référence :", error);
+              //     }
+              //   })
+              // );
+            };
+            messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(message.id);
+            JSON.parse(messagewhithNentionAndReferences.medias);
+            if (receiverSocketId) {
+              
+              try {
+                console.log("before emiting",receiverSocketId);
+                
+              const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+                  message: messagewhithNentionAndReferences,
+                });
+                console.log("after emiting",socketMessage);
+              } catch (error) {
+                console.log("error emiting new message",error.toString());
+              }
+            }
+
+            if (senderSocketId) {
+              try {
+                console.log("before emiting",senderSocketId);
+                
+              const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+                  message: messagewhithNentionAndReferences,
+                });
+                console.log("after emiting",socketMessage);
+              } catch (error) {
+                console.log("error emiting new message",error.toString());
+              }
+            }
+            console.log("in building ", messagewhithNentionAndReferences);
+            return messagewhithNentionAndReferences;
             }
             else{
-              res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
+              // res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
    
               return 
             }
              }
   
            }else{
-          const newmessage = await Messages.create(messageData,{
-            returning :  allconstant.messageattributes
-          } );
+            const newmessage =  await Messages.create(messageData,{
+              returning :  allconstant.messageattributes, 
+            } );
           if (newmessage) {
+            if (element.mentions) {
+              await Promise.all(
+                element.mentions.map(async (mention) => {
+                  try {
+                    let mentionsData = {
+                      message_id	: newmessage.id,
+                      mentioned_user_id : mention
+                    };
+                    return await messageMention.create(mentionsData,{ });
+                  } catch (error) {
+                    console.error("Erreur lors de la création d'une mention :", error);
+                  }
+                })
+              );
+              // for (let userId of mentions) {
+              // }
+            }
+            if (element.references) {
+              console.log("biginig  refeentement");
+              await messageReferenceController.createMany(element.references,newmessage.id);
+              console.log("befor  refeentement");
+              // await Promise.all(
+              //   element.references.map(async (reference) => {
+              //     try {
+              //       let referencesData = {
+              //         message_id: newmessage.id,
+              //         reference_type: reference.reference_type, 
+              //       reference_code: reference.reference_code	
+              //       };
+              //       return await messageReference.create(referencesData,{ });
+              //     } catch (error) {
+              //       console.error("Erreur lors de la création d'une référence :", error);
+              //     }
+              //   })
+              // );
+              
+            }
+           
            const receiverSocketId = getUserSocketId(element.receiverId);
            const senderSocketId = getUserSocketId(element.user_id);
            // console.log("before emiting",receiverSocketId);
-               if (receiverSocketId) {
-                 try {
-                   console.log("before emiting",receiverSocketId);
-                   
-                 const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
-                     message: newmessage,
-                   });
-                   console.log("after emiting",socketMessage);
-                 } catch (error) {
-                   console.log("error emiting new message",error.toString());
-                 }
-               }
- 
-               if (senderSocketId) {
-                 try {
-                   console.log("before emiting",senderSocketId);
-                   
-                 const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
-                     message: newmessage,
-                   });
-                   console.log("after emiting",socketMessage);
-                 } catch (error) {
-                   console.log("error emiting new message",error.toString());
-                 }
-               }
-               console.log("in building ", newmessage);
-           JSON.stringify(newmessage.medias);
+              
 
-               return newmessage;
-            // res.status(200).send({ status: 200, message: "Success", error: null, data: newmessage });
-            // return;
+          //  res.status(200).send({ status: 200, message: "Success", error: null, data: newmessage });
+          // return;
+          // if (mentions || references)
+          //   {
+              messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(newmessage.id);
+        JSON.parse(messagewhithNentionAndReferences.medias);
+              
+              if (receiverSocketId) {
+                try {
+                  console.log("before emiting",receiverSocketId);
+                  
+                const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+                    message: messagewhithNentionAndReferences,
+                  });
+                  console.log("after emiting",socketMessage);
+                } catch (error) {
+                  console.log("error emiting new message",error.toString());
+                }
+              }
+
+              if (senderSocketId) {
+                try {
+                  console.log("before emiting",senderSocketId);
+                  
+                const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+                    message: messagewhithNentionAndReferences,
+                  });
+                  console.log("after emiting",socketMessage);
+                } catch (error) {
+                  console.log("error emiting new message",error.toString());
+                }
+              }
+              console.log("in building ", messagewhithNentionAndReferences);
+          // JSON.stringify(messagewhithNentionAndReferences.medias);
+              return messagewhithNentionAndReferences;
+            //   }
+            //   else{
+            //     if (receiverSocketId) {
+            //       try {
+            //         console.log("before emiting",receiverSocketId);
+                    
+            //       const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+            //           message: newmessage,
+            //         });
+            //         console.log("after emiting",socketMessage);
+            //       } catch (error) {
+            //         console.log("error emiting new message",error.toString());
+            //       }
+            //     }
+  
+            //     if (senderSocketId) {
+            //       try {
+            //         console.log("before emiting",senderSocketId);
+                    
+            //       const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+            //           message: newmessage,
+            //         });
+            //         console.log("after emiting",socketMessage);
+            //       } catch (error) {
+            //         console.log("error emiting new message",error.toString());
+            //       }
+            //     }
+            //     console.log("in building ", newmessage);
+            // JSON.stringify(newmessage.medias);
+            //     return newmessage;
+            //   }
           }
           else{
             return;
@@ -501,12 +457,13 @@ console.log("Element retuning whwen multiple medias sent", messageData);
         }
  
         } else {
+          //  res.status(200).send({ message: "error", error: "error while getting conversation", data: null });
       return;
-          // return res.status(200).send({ message: "error", error: "error while getting conversation", data: null });
         }
       }
  
     } catch (error) {
+      //  await  .rollback();
       return error;
       // res.status(500).send({
       //   message: "Error occurred",
@@ -514,9 +471,94 @@ console.log("Element retuning whwen multiple medias sent", messageData);
       //   data: null,
       // });
     }
- }
-createMesage = async (messageData)=>{
+ };
+ findByPkMesssagesIncludeMentionsAndRefs = async (id)=>{
+
+  try {
+    const message = await Messages.findByPk(id, {
+      include : [
+        {
+          model : messageMention,
+          as: 'mentions', // L'alias défini dans belongsTo
+          include: [
+            {
+              model: Users,
+              as: 'usename', // correspond à messageMention.belongsTo(Users, { as: 'mentionedUser', ... })
+              attributes: ['user_name'] // optionnel : pour cacher les infos sensibles
+            }
+          ]
+
+        },
+        {
+          model : messageReference,
+          as: 'references', // L'alias défini dans belongsTo
+
+        },
+        {
+          model: Messages,
+          as: 'responseFrom', // L'alias défini dans belongsTo
+        },
+        {
+          model: Users,
+          as: 'receiver', 
+          attributes : allconstant.Userattributes,
+        },
+        {
+          model: Users,
+          as: 'sender', 
+          attributes : allconstant.Userattributes,
+        },
+      ]
+    });
+// const mentionUseName  = await Promise.all(
+//   message.mentions.map(async (mention)=>{
+//     const userData  = await UserControl.show(mention.mentioned_user_id);
+//     mention.usename.toString() = userData.user_name;
+//     return mention;
+//   }
+//   )
+// );
+
+// console.log("mentions  whith username =",mentionUseName);
+  // message.mentions = mentionUseName;
+    // const user =  UserControl.show(message.)
+    // let messageReferenceData = await  messageReferenceController.showByMessageId(message.dataValues.id);
+    // let messageMentionData = await  messageMentionController.showByMessageId(message.dataValues.id);
+    // console.log("message mentions effeences", messageReferenceData);
+    return message;
+    // {
+    //   message,
+    //   references: await messageReference.findAll({
+    //     where:{
+    //         message_id : message.dataValues.id
+    //     },
+    //     // attribute: allconstant.mentionsattribute,
+    //     logging: console.log, 
+    // }),
+    //   mentions: await messageMention.findAll({
+    //     where:{
+    //         message_id : message.dataValues.id
+    //     },
+    //     // attribute: allconstant.mentionsattribute,
+    //     logging: console.log, 
+    // }),
+    // };
     
+  } catch (error) {
+    return error;
+  }
+
+ };
+createMesage = async (messageData)=>{
+  try {
+    let newmessage =  await Messages.create(messageData,{
+      returning :  allconstant.messageattributes
+    } );
+    return {data: newmessage, error: null, message: 'success'}
+  } catch (error) {
+    
+    return {data: null, error: error.toString() , message:null };
+  }
 };
 MessagesController.getData = async (req, res) => {
   console.log("getting all data")
@@ -534,7 +576,8 @@ MessagesController.getData = async (req, res) => {
     const data = await Messages.findAll({
       where : conditionMessage
     });
-    res.status(200).send({ message: "Success", error: null, data: data });
+    const messageData = findByPkMesssagesIncludeMentionsAndRefs(data.id);
+    res.status(200).send({ message: "Success", error: null, data: messageData });
   } catch (error) {
     res
       .status(400)
@@ -567,10 +610,29 @@ MessagesController.getMessagesByConversation = async (req, res) => {
   try {
     const data = await Messages.findAll({
       where: conditionMessage,
-      groupBy: [['createdAt', 'DESC']],
+      groupBy: [['createdAt', 'ASC']],
       
     });
-    res.status(200).send({ message: "Success", error: null, data: data });
+    let messageData = await  Promise.all(
+        data.map(async (message)=> {
+          
+          const result = findByPkMesssagesIncludeMentionsAndRefs(message.id);
+       
+        // console.log(result);
+          return  result;
+        })
+    );
+
+    let mediaToObject =  
+      messageData.map((message)=>{
+        let media =   JSON.parse(message.medias);
+        message.medias = media;
+        return message;
+      });
+ 
+    
+    console.log("messages gouped", mediaToObject);
+    res.status(200).send({ message: "Success", error: null, data: mediaToObject });
   } catch (error) {
     res
       .status(400)
@@ -734,18 +796,25 @@ MessagesController.updateMessages = async (req, res) => {
         const senderSocketId = getUserSocketId(data.dataValues.senderId);
         console.warn("socket recerverusers ", receiverSocketId );
         console.warn("socket senderusers ", senderSocketId );
-        if (receiverSocketId) {
-          getIo().to(receiverSocketId).emit("renew_message", {
-            message: data,
-          });
-        }
-        if (senderSocketId) {
-          getIo().to(senderSocketId).emit("renew_message", {
-            message: data,
-          });
+        messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(data.dataValues.id);
+        if (messagewhithNentionAndReferences) {
+          if (receiverSocketId) {
+            getIo().to(receiverSocketId).emit("renew_message", {
+              message: messagewhithNentionAndReferences,
+            });
+          }
+          if (senderSocketId) {
+            getIo().to(senderSocketId).emit("renew_message", {
+              message: messagewhithNentionAndReferences,
+            });
+            
+          }
+          res.status(200).send({ message: "Success", error: null, data: messagewhithNentionAndReferences });
+        }else{
           
+          res.status(200).send({ message: "error", error: 'error while getting message updated', data: null });
         }
-        res.status(200).send({ message: "Success", error: null, data: data });
+       
       }
       else{
         res
@@ -766,4 +835,43 @@ MessagesController.updateMessages = async (req, res) => {
   }
 };
 
-module.exports = MessagesController;
+ extractMentionsAndReferences =  async (message, usersList) => {
+  console.log("in mentions and references");
+  let mentions = [];
+  let references = [];
+try {
+   // Extraction des mentions (@nom)
+   message.match(/@(\w+)/g)?.forEach((mention) => {
+    let username = mention.substring(1); // Supprime le "@"
+    let user = usersList.find(u => u.user_name === username );
+    if (user) {
+        mentions.push(user.id);
+    }
+});
+
+// Extraction des références (#code)
+message.match(/#([A-Z]\d+)/g)?.forEach((ref) => {
+  let refCode = ref.substring(1); // Supprime le "#"
+  
+  let typeMap = {
+      'F': 'invoice',
+      'E': 'expenditure',
+      'D': 'debt',
+      'P': 'payment',
+      'S': 'stock',
+      'C': 'customer',
+      'T': 'tub'
+  };
+
+  let type = typeMap[refCode.charAt(0)] || 'unknown'; // Défaut à 'unknown' si non défini
+  references.push({ type, code: refCode });
+});
+
+return { mentions, references };
+} catch (error) {
+  console.log("Error whilw extrating", error);
+}
+ 
+};
+
+module.exports = {MessagesController,findByPkMesssagesIncludeMentionsAndRefs};

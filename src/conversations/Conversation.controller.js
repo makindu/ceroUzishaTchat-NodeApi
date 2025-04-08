@@ -38,7 +38,7 @@ let condition = {
         },
       ],
       where: condition,
-      order: [['createdAt', 'ASC']],
+      order: [['createdAt', 'ASC'],['updatedAt','ASC']],
       limit: pageSize,
       offset: (page - 1) * pageSize,
     });
@@ -57,8 +57,16 @@ let  medias = await Promise.all( messages.map((message)=>{
     if (message.responseFrom) {
       message.responseFrom.medias=JSON.parse(message.responseFrom.medias);
     }
-      return message;
+    const result =  findByPkMesssagesIncludeMentionsAndRefs(message.id);
+
+      return result;
     }));
+    let mediaToObject =  
+      medias.map((message)=>{
+        let media =   JSON.parse(message.medias);
+        message.medias = media;
+        return message;
+      });
     res.json({
       status:200,
       error:null,
@@ -70,7 +78,7 @@ let  medias = await Promise.all( messages.map((message)=>{
       prevUrl:prevUrl,
       firstUrl:firstUrl,
       lastUrl:lastUrl,
-      data:medias,
+      data:mediaToObject,
     });
   } catch (error) {
     console.error('Erreur lors de la récupération des messages :', error);
@@ -183,10 +191,14 @@ ConversationsController.getData = async (req, res) => {
         order: [['createdAt', 'DESC']],
         limit: 1,
       });
+    let  resultLastMessage = await findByPkMesssagesIncludeMentionsAndRefs(lastMessage.id);
+
       // const MessagesUser = await Messages.findAll({
       //   where: { conversation_id: conversation.id },
       //   order: [['createdAt', 'ASC']],
       // });
+      let media = JSON.parse(resultLastMessage.medias);
+      resultLastMessage.medias = media;
       const unreadMessagesCount = await Messages.count({
         where: {
           conversation_id: conversation.id,
@@ -197,7 +209,7 @@ ConversationsController.getData = async (req, res) => {
       });
       return {
         conversation: conversation,
-        lastMessage: lastMessage ? lastMessage : null,
+        lastMessage: resultLastMessage ? resultLastMessage : null,
         messages : [],
         firstUser: firstUser ? firstUser : null,
         secondUser: secondUser ? secondUser : null,

@@ -1,5 +1,5 @@
 const Sequelize = require("sequelize");
-const Messages =  require("../../db.provider").messages;
+// const Messages =  require("../../db.provider").messages;
 module.exports = (sequelize) => {
   const Users = sequelize.define("users", {
     id:{

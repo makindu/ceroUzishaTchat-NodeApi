@@ -1,5 +1,6 @@
-const  user  = require("../../db.provider").Users;
+const  {Users , Enterprises,usersenterprises } = require('../../db.provider');
 const { Op } = require("sequelize");
+const allconstant = require('../constantes');
 const users = {};
 const UserController = {};
 
@@ -14,7 +15,7 @@ UserController.create = async (req, res) => {
     password: req.body.password,
   };
   try {
-    const result = await user.create(UserData);
+    const result = await Users.create(UserData);
     res.status(200).send({ message: "Success", error: null, data: result });
   } catch (error) {
     res.status(500).send({
@@ -33,7 +34,7 @@ UserController.getData = async (req, res) => {
     };
   }
   try {
-    const data = await user.findAll({ where: condition });
+    const data = await Users.findAll({ where: condition });
     res.status(200).send({ message: "Success", error: null, data: data });
   } catch (error) {
     res
@@ -56,7 +57,7 @@ UserController.getSingleUser = async (req, res) => {
     return;
   }
   try {
-    const data = await user.findByPk(parseInt(req.params.id));
+    const data = await Users.findByPk(parseInt(req.params.id));
     res.status(200).send({ message: "Success", error: null, data: data });
   } catch (error) {
     res
@@ -66,7 +67,19 @@ UserController.getSingleUser = async (req, res) => {
 };
 UserController.show = async (userid) => {
   try {
-    const userData = await user.findByPk(userid, {
+    const userData = await Users.findByPk(userid, {
+      attributes: [`id`, `user_name`, `full_name`, `user_mail`, `user_phone`, `user_type`, `status`, `note`, `avatar`, `uuid`,  `collector` ], // spécifier les champs à retourner
+    });
+
+    return userData;  // Retourne l'utilisateur avec les champs spécifiés
+  } catch (error) {
+    console.error(error);
+    throw new Error('Error fetching user data');
+  }
+};
+UserController.showByEnterprisee = async (enterprise_id) => {
+  try {
+    const userData = await Users.findByPk(userid, {
       attributes: [`id`, `user_name`, `full_name`, `user_mail`, `user_phone`, `user_type`, `status`, `note`, `avatar`, `uuid`,  `collector` ], // spécifier les champs à retourner
     });
 
@@ -86,7 +99,7 @@ UserController.updateUser = async (req, res) => {
   }
 
   try {
-    let result = await user.update(req.body, { where: { id: req.params.id } });
+    let result = await Users.update(req.body, { where: { id: req.params.id } });
     res.status(200).send({ message: "Success", error: null, data: result });
   } catch (error) {
     res
@@ -98,4 +111,25 @@ UserController.updateUser = async (req, res) => {
 UserController.getUserSocketId = (userId) => {
   return users[userId] || null;
 }
+UserController.getEnabledUsersByEnterprise = async (enterpriseId) => {
+  // console.log("Enterpose id",enterpriseId);
+  try {
+    const users = await Users.findAll({
+      include: [
+        {
+          model: usersenterprises,
+          as: "userEnterprises", 
+          where: { enterprise_id: enterpriseId }, 
+          // attributes: allconstant.Userattributes, 
+        },
+      ],
+      where: { status: "enabled" }, // Filtrer par statut
+    });
+    // console.log("data",users)
+    return {data:users,error: null, message:"success" };
+    } catch (error) {
+      
+    return {data:null,error: error.toString(), message:"error" };
+  }
+};
 module.exports = UserController;

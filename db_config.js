@@ -1,9 +1,9 @@
 const DBConfig = {
-  host: "192.168.1.66",
+  host: "127.0.0.1",
   port: 3306,
   database_name: "newdb",
-  database_username: "node_user_api",
-  database_password: "7227",
+  database_username: "root",
+  database_password: "",
   dialect: "mysql",
 };
 

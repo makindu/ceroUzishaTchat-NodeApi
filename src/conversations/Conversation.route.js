@@ -2,7 +2,7 @@ const ConversationsController = require("./Conversation.controller");
 
 const router = require("express").Router();
 
-router.post("/all/:value?", ConversationsController.getData);
+router.post("/all", ConversationsController.getData);
 router.get("/:id", ConversationsController.getSingleConversations);
 router.get("delete/:id", ConversationsController.deletePermanently);
 router.get("/messages/:conversationId", ConversationsController.messages);
