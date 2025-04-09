@@ -483,7 +483,7 @@ console.log("Element retuning whwen multiple medias sent", messageData);
           include: [
             {
               model: Users,
-              as: 'usename', // correspond à messageMention.belongsTo(Users, { as: 'mentionedUser', ... })
+              as: 'username', // correspond à messageMention.belongsTo(Users, { as: 'mentionedUser', ... })
               attributes: ['user_name'] // optionnel : pour cacher les infos sensibles
             }
           ]

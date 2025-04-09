@@ -40,7 +40,7 @@ Users.hasMany(usersenterprises, { foreignKey: "user_id", as: "userEnterprises" }
 usersenterprises.belongsTo(Users, { foreignKey: "user_id", as: "user" });
 messages.hasMany(messageReference, { as: 'references', foreignKey: 'message_id' });
 messages.hasMany(messageMention, { as: 'mentions', foreignKey: 'message_id' });
-messageMention.belongsTo(Users, {foreignKey: 'mentioned_user_id',as: 'usename'});
+messageMention.belongsTo(Users, {foreignKey: 'mentioned_user_id',as: 'username'});
 messageMention.belongsTo(messages, { as: 'message', foreignKey: 'message_id' });
 messageReference.belongsTo(messages, { as: 'message', foreignKey: 'message_id' });
 Enterprises.hasMany(usersenterprises, { foreignKey: "enterprise_id", as: "enterpriseUsers" });

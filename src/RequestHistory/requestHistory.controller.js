@@ -1,14 +1,14 @@
-const   Tubs  = require("../../db.provider").Tubs ;
+const   RequestHistory  = require("../../db.provider").RequestHistory ;
 const { Op } = require("sequelize");
 const allconstant = require("../constantes");
 
-const  TubsController = {};
+const  RequestHistoryController = {};
 
 async function  createMetion (data){
  
   try {
 console.log("before mentions in");
-    const result = await  Tubs.create(data);
+    const result = await  RequestHistory.create(data);
     // res.status(200).send({ message: "Success", error: null, data: result });
     console.log("data mentions",result);
     return {data :result, error : null};
@@ -18,9 +18,9 @@ console.log("before mentions in");
 
   }
 };
- TubsController.showByMessageId = async (id)=>{
+ RequestHistoryController.showByMessageId = async (id)=>{
     try {
-        const mentionData = await  Tubs.findAll({
+        const mentionData = await  RequestHistory.findAll({
             where:{
                 message_id : id
             },
@@ -33,4 +33,4 @@ console.log("before mentions in");
         return {data : null, error: e}
     }
 };
-module.exports =   TubsController;
+module.exports =   RequestHistoryController;
