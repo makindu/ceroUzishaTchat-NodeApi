@@ -50,7 +50,7 @@ module.exports = (sequelize) => {
           type: Sequelize.BIGINT(20).UNSIGNED,
         allowNull: true,
         references: {
-          model: 'enterprises',  
+          model: Enterprises,  
           key: 'id',
         },
         },
@@ -58,12 +58,23 @@ module.exports = (sequelize) => {
           type: Sequelize.BIGINT(20).UNSIGNED,
         allowNull: true,
         references: {
-          model: 'users',  
+          model: Users,  
           key: 'id',
         },
-        }
-  }, {
-    timestamps: true,  // Cela activera automatiquement `createdAt` et `updatedAt`
+        },
+         created_at: {
+              type: Sequelize.DATE,
+              defaultValue: Sequelize.NOW,
+              allowNull: false,
+            },
+                updated_at: {
+                  type: Sequelize.DATE,
+                  defaultValue: Sequelize.NOW,
+                  allowNull: false,
+                },
+            }, {
+    tableName : 'libraries',
+    timestamps: false,  // Cela activera automatiquement `createdAt` et `updatedAt`
   });
   return Libraries;
 };

@@ -17,8 +17,14 @@ const initializeSocket = (server) => {
 
         // Associer un socket à un user_id
         socket.on("joinRoom", (user_id) => {
-            users[user_id] = socket.id;
-            console.log(`✅ Utilisateur ${user_id } rejoint avec socket ${socket.id}`);
+            // if (user_id in users ) {
+                
+            //     console.log(`✅ Utilisateur ${user_id } deja rejoint avec socket ${socket.id}`);
+            // }else{
+
+                users[user_id] = socket.id;
+                console.log(`✅ Utilisateur ${user_id } rejoint avec socket lq nouvelle session ${socket.id}`);
+            // }
             // users.forEach((u)=>{
 
                 console.log(`✅ Utilisateur`,users);

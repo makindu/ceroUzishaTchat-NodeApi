@@ -1,7 +1,11 @@
 const  Conversations  = require("../../db.provider").Conversations;
+const Libraries =  require('../../db.provider').Libraries;
 const Users =  require('../../db.provider').Users;
 const Messages =  require('../../db.provider').messages;
-const { Op, json } = require("sequelize");
+const { Op, json, where } = require("sequelize");
+const getIo =  require("../../socket").getIo;
+const getUserSocketId =  require("../../socket").getUserSocketId;
+
 
 const ConversationsController = {};
 
@@ -109,12 +113,31 @@ ConversationsController.create = async (FirstUser,SecondUser, EnterpriseId ) => 
   };
   try {
     const result = await Conversations.create(ConversationsData);
-    return result
-  } catch (error) {
+    // return result
+    if (result) {
+      return {
+        data: result,
+        status:true,
+        error:null
+      }
+    }
+      else{
+        return {
+          data: null,
+          status:false,
+          error:"convrsation not create"
+        }
+      }
     
+  } catch (error) {
+    return {
+      data: null,
+      status:false,
+      error:error.toString()
+    }
+    // return {error}
   }
 };
-
 ConversationsController.getData = async (req, res) => {
   console.log("getting all data");
 
@@ -141,29 +164,134 @@ ConversationsController.getData = async (req, res) => {
         'createdAt',
         'updatedAt',
         'enterprise_id',
-      ], // spécifier les champs à retourner
+      ],
     });
 
     if (!data || data.length === 0) {
-      return res.status(200).send({ message: "No conversations found", error: null, data: [] });
+      return res.status(500).send({ message: "No conversations found", error: null, data: [] });
     }
 
     const enrichedConversations = await Promise.all(data.map(async (conversation) => {
       let firstUser = null;
       let secondUser = null;
+      let id = parseInt(conversation.id);
+
       let conditionMessage = {
-        [Op.and]:
-          {conversation_id: conversation.id },
-          status: { [Op.ne]: 'deleted' }
-      }
+        [Op.and]: [
+          { conversation_id: id },
+          { status: { [Op.ne]: 'deleted' } }
+        ]
+      };
+
+      // Récupération des utilisateurs
       if (conversation.first_user === req.body.user_id) {
         firstUser = await Users.findByPk(conversation.first_user, {
+          attributes: [
+            'id', 'user_name', 'full_name', 'user_mail', 'user_phone',
+            'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
+          ]
+        });
+        secondUser = await Users.findByPk(conversation.second_user, {
+          attributes: [
+            'id', 'user_name', 'full_name', 'user_mail', 'user_phone',
+            'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
+          ]
+        });
+      } else {
+        firstUser = await Users.findByPk(conversation.second_user, {
+          attributes: [
+            'id', 'user_name', 'full_name', 'user_mail', 'user_phone',
+            'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
+          ]
+        });
+        secondUser = await Users.findByPk(conversation.first_user, {
+          attributes: [
+            'id', 'user_name', 'full_name', 'user_mail', 'user_phone',
+            'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
+          ]
+        });
+      }
+
+      // Récupération du dernier message avec vérification
+      const lastMessage = await Messages.findOne({
+        where: conditionMessage,
+        order: [['createdAt', 'DESC']],
+        limit: 1,
+      });
+
+      let resultLastMessage = null;
+      if (lastMessage) {
+        resultLastMessage = await findByPkMesssagesIncludeMentionsAndRefs(lastMessage.id);
+        if (resultLastMessage && resultLastMessage.medias) {
+          resultLastMessage.medias = JSON.parse(resultLastMessage.medias);
+        }
+      }
+
+      // Compter les messages non lus
+      const unreadMessagesCount = await Messages.count({
+        where: {
+          conversation_id: id,
+          status: 'unread',
+          receiverId: req.body.user_id
+        }
+      });
+
+      return {
+        conversation: conversation,
+        mediasData: [],
+        docsData: [],
+        lastMessage: resultLastMessage,
+        messages: [],
+        firstUser: firstUser || null,
+        secondUser: secondUser || null,
+        unreadMessages: unreadMessagesCount
+      };
+    }));
+
+    res.status(200).send({ status: 200, message: "Success", error: null, data: enrichedConversations });
+
+  } catch (error) {
+    res.status(500).send({ status: 500, message: "Error occurred", error: error.toString(), data: [] });
+  }
+};
+
+ConversationsController.showOne = async (conversation_id,user_id) => {
+  console.log("getting all data");
+
+  
+
+  try {
+    const data = await Conversations.findByPk(
+         conversation_id,{ 
+      attributes: [
+        'id',
+        'first_user',
+        'second_user',
+        'status',
+        'createdAt',
+        'updatedAt',
+        'enterprise_id',
+      ], // spécifier les champs à retourner
+    });
+
+    if (!data) {
+      return res.status(200).send({ message: "No conversations found", error: null, data: [] });
+    }
+      let firstUser = null;
+      let secondUser = null;
+      let condition = {
+        [Op.and]:
+          {conversation_id: data.id },
+          status: { [Op.ne]: 'deleted' }
+      }
+      if (data.first_user === user_id) {
+        firstUser = await Users.findByPk(data.first_user, {
           attributes: [
             'id', 'user_name', 'full_name', 'user_mail', 'user_phone', 
             'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
           ]
         });
-        secondUser = await Users.findByPk(conversation.second_user, {
+        secondUser = await Users.findByPk(data.second_user, {
           attributes: [
             'id', 'user_name', 'full_name', 'user_mail', 'user_phone', 
             'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
@@ -171,13 +299,13 @@ ConversationsController.getData = async (req, res) => {
         });
       } else {
         // Si `user_id` est le `second_user`, inversez les utilisateurs
-        firstUser = await Users.findByPk(conversation.second_user, {
+        firstUser = await Users.findByPk(data.second_user, {
           attributes: [
             'id', 'user_name', 'full_name', 'user_mail', 'user_phone', 
             'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
           ]
         });
-        secondUser = await Users.findByPk(conversation.first_user, {
+        secondUser = await Users.findByPk(data.first_user, {
           attributes: [
             'id', 'user_name', 'full_name', 'user_mail', 'user_phone', 
             'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
@@ -187,44 +315,39 @@ ConversationsController.getData = async (req, res) => {
 
       // Récupérer le dernier message de la conversation
       const lastMessage = await Messages.findOne({
-        where: conditionMessage,
+        where: condition ,
         order: [['createdAt', 'DESC']],
         limit: 1,
       });
-    let  resultLastMessage = await findByPkMesssagesIncludeMentionsAndRefs(lastMessage.id);
-
-      // const MessagesUser = await Messages.findAll({
-      //   where: { conversation_id: conversation.id },
-      //   order: [['createdAt', 'ASC']],
-      // });
-      let media = JSON.parse(resultLastMessage.medias);
-      resultLastMessage.medias = media;
+      const MessagesUser = await Messages.findAll({
+        where: condition,
+        order: [['createdAt', 'ASC']],
+      
+      });
       const unreadMessagesCount = await Messages.count({
         where: {
-          conversation_id: conversation.id,
+          conversation_id: data.id,
           status: 'unread', 
           // senderId: req.body.user_id ,
-           receiverId: req.body.user_id
+           receiverId: user_id
         }
       });
-      return {
-        conversation: conversation,
-        lastMessage: resultLastMessage ? resultLastMessage : null,
+      const enrichedConversations =  {
+        conversation: data,
+        lastMessage: lastMessage ? lastMessage : null,
         messages : [],
         firstUser: firstUser ? firstUser : null,
         secondUser: secondUser ? secondUser : null,
         unreadMessages: unreadMessagesCount
       };
-    }));
-
-    res.status(200).send({ staus: 200, message: "Success", error: null, data: enrichedConversations });
-
+   
+      return    enrichedConversations;
   } catch (error) {
-    res.status(400).send({ status: 500, message: "Error occurred", error: error.toString(), data: [] });
-    return;
+    // res.status(400).send({ status: 500, message: "Error occurred", error: error.toString(), data: [] });
+    return json( { message: "error" , data :  null});
   }
 };
-ConversationsController.showOne = async (conversation_id,user_id) => {
+showOneConversation = async (conversation_id,user_id) => {
   console.log("getting all data");
 
   
@@ -384,5 +507,152 @@ ConversationsController.updateConversations = async (req, res) => {
       .send({ message: "Error", error: error.toString(), data: null });
   }
 };
+ConversationsController.getConversationMedias = async (req, res)=>{
+    if (!req.body.conversation) {
+      res
+      .status(400)
+      .send({ message: "Error", error: "some data required", data: null });
+    return;
+    }
+try {
+  
+    const conversation = await Conversations.findByPk(parseInt(req.body.conversation));
+
+    if (conversation) 
+    {
+      const messagesCondition = {
+        [Op.or]:[
+          {
+            senderId : conversation.first_user,
+            receiverId: conversation.second_user
+          },
+          {
+            senderId: conversation.second_user,
+            receiverId:  conversation.first_user,
+          }
+        ],
+        status: { [Op.ne]: 'deleted' },
+        medias: {[Op.ne]:{}}
+      };
+        const messages = await Messages.findAll({where: messagesCondition });
+        if (messages){
+          let messageMap = await Promise.all(
+            messages.map(async(message)=>{
+                return JSON.parse(message.medias);
+            })
+          );
+          let  files =  messageMap.filter( 
+            m=>m.category === 'docs' );
+        
+          let  medias = messageMap.filter( m=>m.category === 'medias' );
+          ;
+          const result = {
+            mediasData : medias,
+            docsData :  files
+          }
+          res
+      .status(200)
+      .send({ message: "Success", error: null, data: result });
+    return;
+        }else{
+          res
+          .status(200)
+          .send({ message: "Error", error: "no message found", data: null });
+        return;
+        }               
+    }else{
+      res
+          .status(200)
+          .send({ message: "Error", error: "no Conversation found found", data: null });
+        return;
+    }
+} catch (error) {
+  res
+  .status(500)
+  .send({ message: "Error", error: error.toString(), data: null });
+return;
+}
+
+}
+ConversationsController.conversationExist = async (element) => {
+  try {
+    const condition = {
+      [Op.or]: [
+        { first_user: element.user_id, second_user: element.receiverId },
+        { first_user: element.receiverId, second_user: element.user_id },
+      ]
+    };
+
+    let conversation = await Conversations.findOne({ where: condition });
+
+    if (conversation) {
+      const enrichedConversation = await showOneConversation(conversation.id, element.user_id);
+      const receiverSocketId = getUserSocketId(element.receiverId);
+      const senderSocketId = getUserSocketId(element.user_id);
+
+      if (receiverSocketId) {
+        getIo().to(receiverSocketId).emit("new_conversation", {
+          conversation: enrichedConversation,
+        });
+      }
+      if (senderSocketId) {
+        getIo().to(senderSocketId).emit("new_conversation", {
+          conversation: enrichedConversation,
+        });
+      }
+
+      return {
+        data: conversation,
+        status: true,
+        error: null
+      };
+    } else {
+      let convrsationData = {
+        first_user: element.user_id,
+        second_user: element.receiverId,
+        status: 'activated',
+        enterprise_id: element.enterprise_id
+      };
+
+      const result = await Conversations.create(convrsationData);
+
+      if (result) {
+        const enrichedConversation = await showOneConversation(result.id, element.user_id);
+        const receiverSocketId = getUserSocketId(element.receiverId);
+        const senderSocketId = getUserSocketId(element.user_id);
+
+        if (receiverSocketId) {
+          getIo().to(receiverSocketId).emit("new_conversation", {
+            conversation: enrichedConversation,
+          });
+        }
+        if (senderSocketId) {
+          getIo().to(senderSocketId).emit("new_conversation", {
+            conversation: enrichedConversation,
+          });
+        }
+
+        return {
+          data: result,
+          status: true,
+          error: null
+        };
+      } else {
+        return {
+          data: null,
+          status: false,
+          error: "Conversation not found"
+        };
+      }
+    }
+  } catch (error) {
+    return {
+      data: null,
+      status: false,
+      error: error.toString()
+    };
+  }
+};
+
 
 module.exports = ConversationsController;

@@ -8,7 +8,7 @@ const sequelize = new Sequelize(
   {
     host: DBConfig.host,
     dialect: DBConfig.dialect,
-    logging: true,
+    logging: console.log,
   }
 );
 
@@ -30,6 +30,7 @@ const Money =  require("./src/Money/money.model")(sequelize);
 const Tubs = require("./src/Tubs/tubs.model")(sequelize);
 const Entries = require('./src/Entrie/entries.model')(sequelize);
 const RequestHistory = require('./src/RequestHistory/requestHistory.model')(sequelize);
+const Libraries = require('./src/libraries/libraries.model')(sequelize);
 // Définir les relations
 Users.hasMany(messages, { foreignKey: "senderId", as: "sentMessages" });
 Users.hasMany(messages, { foreignKey: "receiverId", as: "receivedMessages" });
@@ -82,6 +83,7 @@ Stocks,
 Money,
  Tubs,
  Entries,
- RequestHistory
+ RequestHistory,
+ Libraries
 
 };

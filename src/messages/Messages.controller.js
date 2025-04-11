@@ -12,6 +12,7 @@ const messageReferenceController =  require('../MessageReference/message.referen
 const { Op } = require("sequelize");
 const allconstant = require("../../src/constantes");
 const { Compressor } = require("mongodb");
+const ConversationsController = require("../conversations/Conversation.controller");
 const MessagesController = {};
 
 MessagesController.create = async (req, res) => {
@@ -45,27 +46,35 @@ return res.status(200).send({
  }
 };
 MessagesController.createMedia = async (req, res) => {
- if (!req.body.data) {
-   res.status(400).send("data is empty ensure that data contain anything");
-   return;
-  
- }else{
-  // let messageData = [];
-  try {
-    // Utiliser map pour créer un tableau de promesses
-    const messagePromises = req.body.data.map(async (element) => {
-      return await MessageSendOne(element);
-    });
+  if (!req.body.data) {
+    return res.status(400).send("data is empty, ensure that data contains something");
+  }
 
-    // Attendre la résolution de toutes les promesses
-    const messageData = await Promise.all(messagePromises);
-console.log("Element retuning whwen multiple medias sent", messageData);
+  try {
+    let messageResults = [];
+
+    for (let index = 0; index < req.body.data.length; index++) {
+      const element = req.body.data[index];
+      const existing = await ConversationsController.conversationExist(element);
+
+      if (existing.status === true) {
+        const newMessage = await MessageSendOnce(element, existing.data);
+
+        if (newMessage) {
+          messageResults.push(newMessage);
+        }
+      } else {
+        console.log("Conversation not found or failed to create.");
+      }
+    }
+
     res.status(200).send({
       status: 200,
       message: "Success",
       error: null,
-      data: messageData.filter((msg) => msg != null), 
+      data: messageResults,
     });
+
   } catch (error) {
     res.status(500).send({
       message: "error",
@@ -73,13 +82,442 @@ console.log("Element retuning whwen multiple medias sent", messageData);
       data: null,
     });
   }
- }
+};
 
- };
-   MessageSendOne =  async (element)=>{
+// MessagesController.createMedia = async (req, res) => {
+//  if (!req.body.data) {
+//    res.status(400).send("data is empty ensure that data contain anything");
+//    return;
+  
+//  }else{
+//   // let messageData = [];
+
+//   try {
+//     let messagePromises = []; 
+
+//     for (let index = 0; index < req.body.data.length; index++) {
+//       const element = req.body.data[index];
+//       existing = await ConversationsController.conversationExist(element);
+//       if (existing.status === true) 
+//       {
+//         // conversation = existing.data ;
+//         console.log("convesation exite in the database");
+//         let newmessage =  await MessageSendOnce(element,existing.data);
+//         // console.log("message sent",newmessage);
+//           if (newmessage) {
+
+//             messagePromises.push(newmessage);
+//             console.log("mssag promise",messagePromises);
+//             // return newmessage;
+//           }
+//       }
+//       else{
+//         console.log("convesation not exite in the database");
+//       }
+      
+//     }
+// // console.log("Element retuning whwen multiple medias sent", messageData);
+//     res.status(200).send({
+//       status: 200,
+//       message: "Success",
+//       error: null,
+//       data: messagePromises, 
+//     });
+//     return;
+//   } catch (error) {
+//     res.status(500).send({
+//       message: "error",
+//       error: error.toString(),
+//       data: null,
+//     });
+//   }
+//  }
+//  };
+// MessagesController.createMedia = async (req, res) => {
+//  if (!req.body.data) {
+//    res.status(400).send("data is empty ensure that data contain anything");
+//    return;
+  
+//  }else{
+//   // let messageData = [];
+
+//   try {
+//     let conversationCache = {}; 
+
+//     const messagePromises =  req.body.data.map(async (element) => {
+//     const cacheKey = `${element.user_id}_${element.receiverId}_${element.enterprise_id}`;
+
+//       let conversation;
+//       if (conversationCache[cacheKey]) {
+//         conversation = conversationCache[cacheKey];
+//         console.log("convesation created=========",conversation);
+//       } else {
+//        existing = await ConversationsController.conversationExist(element);
+//       if (existing.status == true ) 
+//       {
+//         conversation = existing.data ;
+//         console.log("convesation created========= 2",conversation);
+//           let newmessage =  await MessageSendOnce(element,conversation);
+//           if (newmessage) {
+
+//             return newmessage;
+//           }
+//           else{
+//             return null;
+//           }
+//       }else{
+//          let resultat  = await ConversationsController.create(element.user_id,element.receiverId,element.enterprise_id)
+//          if(resultat){
+//           conversation =  resultat.data;
+//           console.log("convesation created=========3",conversation);
+//           let newmessage =  await MessageSendOnce(element,conversation);
+//          if (newmessage) {
+
+//            return newmessage;
+//          }
+//          else{
+//            return null;
+//          }
+//         }}
+//       }
+//       console.log("convesation created=========4",conversation);
+
+//       conversationCache[cacheKey] = conversation;
+//     });
+
+//     // Attendre la résolution de toutes les promesses
+//     const messageData = await Promise.all( messagePromises);
+// console.log("Element retuning whwen multiple medias sent", messageData);
+//     res.status(200).send({
+//       status: 200,
+//       message: "Success",
+//       error: null,
+//       data: messageData.filter((msg) => msg != null), 
+//     });
+//   } catch (error) {
+//     res.status(500).send({
+//       message: "error",
+//       error: error.toString(),
+//       data: null,
+//     });
+//   }
+//  }
+//  };
+// MessagesController.createMedia = async (req, res) => {
+//   if (!req.body.data || !Array.isArray(req.body.data)) {
+//     return res.status(400).send("data is empty or not an array; ensure that data contains something.");
+//   }
+
+//   try {
+//     const conversationCache = {}; // cache pour éviter les doublons
+
+//     const messagePromises = req.body.data.map(async (element) => {
+//       const cacheKey = `${element.user_id}_${element.receiverId}_${element.enterprise_id}`;
+
+//       let conversation;
+
+//       // Vérifier si la conversation est déjà en cache
+//       if (conversationCache[cacheKey]) {
+//         conversation = conversationCache[cacheKey];
+//       } else {
+//         // Vérifier si la conversation existe en DB
+//         const existing = await ConversationsController.conversationExist(element);
+
+//         if (existing.status === true && existing.data) {
+//           conversation = existing.data;
+//         } else {
+//           // Créer une nouvelle conversation
+//           const created = await ConversationsController.create(
+//             element.user_id,
+//             element.receiverId,
+//             element.enterprise_id
+//           );
+
+//           if (created && created.data) {
+//             conversation = created.data;
+//           } else {
+//             return null; // en cas d'échec de création
+//           }
+//         }
+
+//         // Mettre en cache pour les prochains messages similaires
+//         conversationCache[cacheKey] = conversation;
+//       }
+
+//       // Envoyer le message dans la conversation trouvée ou créée
+//       const newMessage = await MessageSendOnce(element, conversation);
+//       return newMessage || null;
+//     });
+
+//     // Attendre que tous les messages soient envoyés
+//     const messageData = await Promise.all(messagePromises);
+
+//     res.status(200).send({
+//       status: 200,
+//       message: "Success",
+//       error: null,
+//       data: messageData.filter((msg) => msg !== null),
+//     });
+//   } catch (error) {
+//     res.status(500).send({
+//       status: 500,
+//       message: "Error while sending media messages",
+//       error: error.toString(),
+//       data: null,
+//     });
+//   }
+// };
+
+ MessageSendOnce = async (element,conversationExist)=>{
+  if (!element.conversation_id || element.conversation_id === '' ) {
+    console.log("conversation found ", conversationExist);
+    element.conversation_id = conversationExist.id;
+    //  res.status(200).send({ message: "error", error: "conversation identification failed", data: null });
+    //  return;
+  }
+
+  
+    messageData = {
+      content: element.content,
+      medias: element.medias,
+      senderId: element.user_id,
+      receiverId: element.receiverId,
+      enterprise_id: element.enterprise_id,
+      conversation_id: conversationExist.id,
+      forwarded:element.forwarded
+    };
+    if( element.message_id ){
+      console.log("herer i respond to any message");
+      // console.log("before emiting",receiverSocketId);
+      const messageResponded = await Messages.findByPk( parseInt(element.message_id));
+      if (messageResponded) {
+         messageData.ResponseId = element.message_id;
+         const newmessage =  await Messages.create(messageData,{
+          returning :  allconstant.messageattributes, 
+        } );
+      if (newmessage) {
+          
+        const message = await Messages.findByPk(newmessage.id, {
+          include: [
+            {
+              model: Messages,
+              as: 'responseFrom', // L'alias défini dans belongsTo
+            },
+            {
+              model: Users,
+              as: 'receiver', 
+              attributes : allconstant.Userattributes,
+            },
+            {
+              model: Users,
+              as: 'sender', 
+              attributes : allconstant.Userattributes,
+            },
+          ],
+        });
+     JSON.parse(message.responseFrom.medias);
+       const receiverSocketId = getUserSocketId(element.receiverId);
+       const senderSocketId = getUserSocketId(element.user_id);
+       if (element.mentions) {
+        await Promise.all(
+          element.mentions.map(async (mention) => {
+            try {
+              let mentionsData = {
+                message_id	: newmessage.id,
+                mentioned_user_id : mention
+              };
+              return await messageMention.create(mentionsData);
+            } catch (error) {
+              console.error("Erreur lors de la création d'une mention :", error);
+            }
+          })
+        );
+        // for (let userId of mentions) {
+        // }
+      }
+      if (element.references) {
+        console.log("biginig  refeentement");
+      await messageReferenceController.createMany(element.references,newmessage.id);
+      console.log("befor  refeentement");
+        // await Promise.all(
+        //   element.references.map(async (reference) => {
+        //     try {
+        //       let referencesData = {
+        //         message_id: newmessage.id,
+        //         reference_type: reference.reference_type, 
+        //       reference_code: reference.reference_code
+        //       };
+        //       return await messageReference.create(referencesData,{ });
+        //     } catch (error) {
+        //       console.error("Erreur lors de la création d'une référence :", error);
+        //     }
+        //   })
+        // );
+      };
+      messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(message.id);
+      JSON.parse(messagewhithNentionAndReferences.medias);
+      if (receiverSocketId) {
+        
+        try {
+          console.log("before emiting",receiverSocketId);
+          
+        const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+            message: messagewhithNentionAndReferences,
+          });
+          console.log("after emiting",socketMessage);
+        } catch (error) {
+          console.log("error emiting new message",error.toString());
+        }
+      }
+
+      if (senderSocketId) {
+        try {
+          console.log("before emiting",senderSocketId);
+          
+        const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+            message: messagewhithNentionAndReferences,
+          });
+          console.log("after emiting",socketMessage);
+        } catch (error) {
+          console.log("error emiting new message",error.toString());
+        }
+      }
+      console.log("in building ", messagewhithNentionAndReferences);
+      // return messagewhithNentionAndReferences;
+      }
+      else{
+        // res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
+
+        return 
+      }
+       }
+
+     }else{
+      const newmessage =  await Messages.create(messageData,{
+        returning :  allconstant.messageattributes, 
+      } );
+    if (newmessage) {
+      if (element.mentions) {
+        await Promise.all(
+          element.mentions.map(async (mention) => {
+            try {
+              let mentionsData = {
+                message_id	: newmessage.id,
+                mentioned_user_id : mention
+              };
+              return await messageMention.create(mentionsData,{ });
+            } catch (error) {
+              console.error("Erreur lors de la création d'une mention :", error);
+            }
+          })
+        );
+        // for (let userId of mentions) {
+        // }
+      }
+      if (element.references) {
+        console.log("biginig  refeentement");
+        await messageReferenceController.createMany(element.references,newmessage.id);
+        console.log("befor  refeentement");
+        // await Promise.all(
+        //   element.references.map(async (reference) => {
+        //     try {
+        //       let referencesData = {
+        //         message_id: newmessage.id,
+        //         reference_type: reference.reference_type, 
+        //       reference_code: reference.reference_code	
+        //       };
+        //       return await messageReference.create(referencesData,{ });
+        //     } catch (error) {
+        //       console.error("Erreur lors de la création d'une référence :", error);
+        //     }
+        //   })
+        // );
+        
+      }
+     
+     const receiverSocketId = getUserSocketId(element.receiverId);
+     const senderSocketId = getUserSocketId(element.user_id);
+     // console.log("before emiting",receiverSocketId);
+        
+
+    //  res.status(200).send({ status: 200, message: "Success", error: null, data: newmessage });
+    // return;
+    // if (mentions || references)
+    //   {
+        messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(newmessage.id);
+  JSON.parse(messagewhithNentionAndReferences.medias);
+        
+        if (receiverSocketId) {
+          try {
+            console.log("before emiting",receiverSocketId);
+            
+          const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+              message: messagewhithNentionAndReferences,
+            });
+            console.log("after emiting",socketMessage);
+          } catch (error) {
+            console.log("error emiting new message",error.toString());
+          }
+        }
+
+        if (senderSocketId) {
+          try {
+            console.log("before emiting",senderSocketId);
+            
+          const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+              message: messagewhithNentionAndReferences,
+            });
+            console.log("after emiting",socketMessage);
+          } catch (error) {
+            console.log("error emiting new message",error.toString());
+          }
+        }
+        console.log("in building ", messagewhithNentionAndReferences);
+    // JSON.stringify(messagewhithNentionAndReferences.medias);
+        // return messagewhithNentionAndReferences;
+      //   }
+      //   else{
+      //     if (receiverSocketId) {
+      //       try {
+      //         console.log("before emiting",receiverSocketId);
+              
+      //       const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+      //           message: newmessage,
+      //         });
+      //         console.log("after emiting",socketMessage);
+      //       } catch (error) {
+      //         console.log("error emiting new message",error.toString());
+      //       }
+      //     }
+
+      //     if (senderSocketId) {
+      //       try {
+      //         console.log("before emiting",senderSocketId);
+              
+      //       const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+      //           message: newmessage,
+      //         });
+      //         console.log("after emiting",socketMessage);
+      //       } catch (error) {
+      //         console.log("error emiting new message",error.toString());
+      //       }
+      //     }
+      //     console.log("in building ", newmessage);
+      // JSON.stringify(newmessage.medias);
+      //     return newmessage;
+      //   }
+    }
+    else{
+      return;
+    }
+  }
+
+  
+ }
+MessageSendOne =  async (element)=>{
 
     console.log("in");
-    const condition = {
+    let condition = {
       [Op.or]: [
         { first_user: element.user_id ,
          second_user: element.receiverId },
@@ -89,7 +527,6 @@ console.log("Element retuning whwen multiple medias sent", messageData);
       ]
     };
  
-    let conversationExist = {};
     let messageData = {};
     let messagewhithNentionAndReferences;
     // const   = await sequelize. ();
@@ -100,7 +537,7 @@ console.log("Element retuning whwen multiple medias sent", messageData);
     //  let { mentions, references } = await extractMentionsAndReferences(element.content, usersList.data);
     //  console.log("list mentions" ,mentions);
     //  console.log("list references" ,references);
-     conversationExist = await Conversations.findOne({ where: condition });
+     let conversationExist = await Conversations.findOne({ where: condition });
  
       if (!conversationExist) {
         console.log("this convesation is newer i.e it's not exist at last");
@@ -199,12 +636,12 @@ console.log("Element retuning whwen multiple medias sent", messageData);
            messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(newmessage.id);
            console.log("in building ", messagewhithNentionAndReferences);
        JSON.parse(messagewhithNentionAndReferences.medias);
-           return messagewhithNentionAndReferences;
+          //  return messagewhithNentionAndReferences;
           // return res.status(200).send({ message: "Success", error: null, data: newmessage });
           }
         } else {
 
-          return;
+          // return;
           // return res.status(200).send({ message: "error occurred", error: "error while creating conversation", data: null });
         }
       } else {
@@ -227,7 +664,7 @@ console.log("Element retuning whwen multiple medias sent", messageData);
             senderId: element.user_id,
             receiverId: element.receiverId,
             enterprise_id: element.enterprise_id,
-            conversation_id: getConversation.id,
+            conversation_id: conversationExist.id,
             forwarded:element.forwarded
           };
           if( element.message_id ){
@@ -327,7 +764,7 @@ console.log("Element retuning whwen multiple medias sent", messageData);
               }
             }
             console.log("in building ", messagewhithNentionAndReferences);
-            return messagewhithNentionAndReferences;
+            // return messagewhithNentionAndReferences;
             }
             else{
               // res.status(500).send({ status: 500, message: "error", error: 'message non envoyer ', data: null });
@@ -418,7 +855,7 @@ console.log("Element retuning whwen multiple medias sent", messageData);
               }
               console.log("in building ", messagewhithNentionAndReferences);
           // JSON.stringify(messagewhithNentionAndReferences.medias);
-              return messagewhithNentionAndReferences;
+              // return messagewhithNentionAndReferences;
             //   }
             //   else{
             //     if (receiverSocketId) {
