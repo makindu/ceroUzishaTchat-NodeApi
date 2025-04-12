@@ -4,6 +4,20 @@ const allconstant = require('../constantes');
 const users = {};
 const UserController = {};
 
+/**
+ * Vérifie si un utilisateur existe.
+ * @param {Object} filter 
+ * @returns {Promise<boolean>}
+ */
+UserController.userExists  = async (filter) =>{
+  try {
+    const user = await Users.findOne({ where: filter , attributes: allconstant.Userattributes });
+    return !!user; 
+  } catch (error) {
+    console.error("Erreur lors de la vérification de l'utilisateur :", error);
+    return false;
+  }
+};
 UserController.create = async (req, res) => {
   if (!req.body.fullname) {
     res.status(400).send("Fullname is requried");

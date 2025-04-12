@@ -1,0 +1,51 @@
+const Sequelize = require("sequelize");
+const Users = require('../users/user.model');
+const Conversations = require('./Conversation.model');
+
+module.exports = (sequelize) => {
+  let Participer = sequelize.define("participer", {
+    id: {
+      type: Sequelize.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    id_user: {
+      type: Sequelize.BIGINT(20).UNSIGNED,
+      allowNull: true,
+      references: {
+        model: Users,  // Nom de la table 'users'
+        key: 'id',
+      },   
+      onUpdate: 'CASCADE',   
+    },
+    id_conversation : {
+      type: Sequelize.BIGINT(20).UNSIGNED,
+      allowNull: true,
+      references: {
+        model: Conversations,  // Nom de la table 'users'
+        key: 'id',
+      },  
+      onUpdate: 'CASCADE',   
+    },
+    role : {
+      type: Sequelize.STRING(20),
+      allowNull: false, 
+      defaultValue : 'writter',  
+    },
+  created_at: {
+      type: Sequelize.DATE,
+      defaultValue: Sequelize.NOW,
+      allowNull: false,
+    },
+    updated_at: {
+      type: Sequelize.DATE,
+      defaultValue: Sequelize.NOW,
+      allowNull: false,
+    },
+  }, {
+    tableName: 'participer',
+    timestamps: false,  
+  });
+
+  return Participer;
+};

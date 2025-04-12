@@ -27,6 +27,18 @@ allconstant.refeencesattribute = [
 'message_id',
 'reference_type',
 'reference_code',
+];
+allconstant.convesationAttribut = [
+"id",
+"status",
+"first_user",
+"second_user",
+"group_name",
+"description",
+"type",
+"createdAt",
+"updatedAt",
+"enterprise_id",
 ]
 allconstant.capitalizeFirstLetter = (input) => {
   if (!input) return '';

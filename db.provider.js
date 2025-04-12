@@ -31,6 +31,7 @@ const Tubs = require("./src/Tubs/tubs.model")(sequelize);
 const Entries = require('./src/Entrie/entries.model')(sequelize);
 const RequestHistory = require('./src/RequestHistory/requestHistory.model')(sequelize);
 const Libraries = require('./src/libraries/libraries.model')(sequelize);
+const Participer =  require('./src/conversations/participer.model')(sequelize);
 // Définir les relations
 Users.hasMany(messages, { foreignKey: "senderId", as: "sentMessages" });
 Users.hasMany(messages, { foreignKey: "receiverId", as: "receivedMessages" });
@@ -46,19 +47,11 @@ messageMention.belongsTo(messages, { as: 'message', foreignKey: 'message_id' });
 messageReference.belongsTo(messages, { as: 'message', foreignKey: 'message_id' });
 Enterprises.hasMany(usersenterprises, { foreignKey: "enterprise_id", as: "enterpriseUsers" });
 usersenterprises.belongsTo(Enterprises, { foreignKey: "enterprise_id", as: "enterprise" });
-
-// customer relations 
-
-// customer.belongsTo(models.Pos, { foreignKey: 'pos_id' });
-// customer.belongsTo(models.Category, { foreignKey: 'category_id' });
-// customer.belongsTo(models.Member, { foreignKey: 'member_id' });
+Participer.belongsTo(Users, {foreignKey : "id_user", as :"participants" });
 customer.belongsTo(Enterprises, { foreignKey: 'enterprise_id' });
 
 // Relations / associations
 Expenditures.belongsTo( Users, { foreignKey: 'user_id' });
-// Expenditures.belongsTo( Money, { foreignKey: 'money_id' });
-// Expenditures.belongsTo( TicketOffice, { foreignKey: 'ticket_office_id' });
-// Expenditures.belongsTo( Account, { foreignKey: 'account_id' });
 Expenditures.belongsTo( Enterprises, { foreignKey: 'enterprise_id' });
 
 
@@ -84,6 +77,7 @@ Money,
  Tubs,
  Entries,
  RequestHistory,
- Libraries
+ Libraries,
+ Participer
 
 };

@@ -2,10 +2,13 @@ const  Conversations  = require("../../db.provider").Conversations;
 const Libraries =  require('../../db.provider').Libraries;
 const Users =  require('../../db.provider').Users;
 const Messages =  require('../../db.provider').messages;
+const allconstant = require("../constantes");
+const UserController = require('../users/user.controller');
+const Participer =  require('../../db.provider').Participer;
 const { Op, json, where } = require("sequelize");
 const getIo =  require("../../socket").getIo;
 const getUserSocketId =  require("../../socket").getUserSocketId;
-
+const connection  = require('../../db.provider').connection;
 
 const ConversationsController = {};
 
@@ -347,23 +350,43 @@ ConversationsController.showOne = async (conversation_id,user_id) => {
     return json( { message: "error" , data :  null});
   }
 };
-showOneConversation = async (conversation_id,user_id) => {
-  console.log("getting all data");
+const getUsersInConversation = async (conversationId) => {
+  try {
+    const participants = await Participer.findAll({
+      attributes: ['role'],
+      where: { id_conversation: conversationId },
+      include: [
+        {
+          model: Users,
+          as: 'participants', 
+          attributes: allconstant.Userattributes
+        }
+      ],
+    });
+    const members = participants.map(p => {
+      return {
+        role: p.role,
+        ...p.participants?.dataValues
+      };
+    });
+
+    return members;
+
+  } catch (error) {
+    console.error('Erreur lors de la récupération des participants :', error);
+    return [];
+  }
+};
+
+showOneConversation = async (conversation_id,user_id,type) => {
+  console.log("getting all data ", type);
 
   
 
   try {
     const data = await Conversations.findByPk(
          conversation_id,{ 
-      attributes: [
-        'id',
-        'first_user',
-        'second_user',
-        'status',
-        'createdAt',
-        'updatedAt',
-        'enterprise_id',
-      ], // spécifier les champs à retourner
+      attributes: allconstant.convesationAttribut // spécifier les champs à retourner
     });
 
     if (!data) {
@@ -424,19 +447,22 @@ showOneConversation = async (conversation_id,user_id) => {
            receiverId: user_id
         }
       });
+      const userMember = await getUsersInConversation(data.id);
+      console.log("user member", userMember);
       const enrichedConversations =  {
         conversation: data,
         lastMessage: lastMessage ? lastMessage : null,
         messages : [],
         firstUser: firstUser ? firstUser : null,
         secondUser: secondUser ? secondUser : null,
+        members : type === 'group' ? userMember : null,
         unreadMessages: unreadMessagesCount
       };
    
       return    enrichedConversations;
   } catch (error) {
     // res.status(400).send({ status: 500, message: "Error occurred", error: error.toString(), data: [] });
-    return json( { message: "error" , data :  null});
+    return json( { message: "error" , error: error.toString(), data :  null});
   }
 };
 
@@ -653,6 +679,87 @@ ConversationsController.conversationExist = async (element) => {
     };
   }
 };
+ConversationsController.createGroup = async (req,res)=>{
+
+  if (!req.body || !req.body.members ) {
+    res
+    .status(500)
+    .send({ message: "Error", error: "some data required", data: null });
+  return;
+  }
+  let transaction = await connection.transaction();
+  try {
+    let  conversation = await Conversations.create(req.body);
+    let data = {};
+    if (conversation) 
+      {
+        for (let index = 0; index < req.body.members.length; index++) {
+          const User = req.body.members[index];
+          const userfound =  await UserController.userExists({id:User.id});
+          if (userfound) {
+            const socketId = getUserSocketId(User.id);
+              let groupdata = {
+                id_user : User.id,
+                id_conversation : conversation.id,
+                role: User.id === req.body.user_id ? "admin" : "writter"
+              };
+              let userInConversation = await Participer.create(groupdata);
+              if (userInConversation) {
+                
+                const convesationFormat = await showOneConversation(conversation.id,User.id,req.body.type);
+                if (convesationFormat) {
+                  
+                  data = convesationFormat;
+                
+                  
+                        
+                          if (socketId) {
+                            getIo().to(socketId).emit("new_conversation", {
+                              conversation: data,
+                            });
+                          }
+                        
+                      // const sendersocketId = getUserSocketId(userId);
+                      //     if (socketId) {
+                      //       getIo().to(sendersocketId).emit("new_message", {
+                      //         message: messagewhithNentionAndReferences,
+                      //       });
+                      //     }
+                   
+                  
+                  console.log("participant convrsation", convesationFormat);
+                }
+              
+
+          }
+          else{
+            await transaction.rollback();
+            res
+                  .status(400)
+                  .send({ message: "Error", error: "User not fount", data: null });
+                return;
+          // }
+        }  
+    }
+    
+  } ;
+  
+  await  transaction.commit();
+                  res
+                  .status(200)
+                  .send({ message: "Success", error: null, data: data });
+                return;
+} }catch (error) {
+    await transaction.rollback();
+    res
+                  .status(400)
+                  .send({ message: "Error", error: error.toString(), data: null });
+                return;
+  }
+  
+
+
+}
 
 
 module.exports = ConversationsController;

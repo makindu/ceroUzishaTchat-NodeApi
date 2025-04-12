@@ -41,32 +41,28 @@ module.exports = (sequelize) => {
       onUpdate: 'CASCADE',   
     },
     status: {
-      type: Sequelize.STRING,
+      type: Sequelize.STRING(20),
       allowNull: false,
       defaultValue: "activated"
     },
+    group_name:{
+      type: Sequelize.TEXT,
+      allowNull: false
+    },
+    description:{
+      type:Sequelize.TEXT,
+      allowNull:true
+    },
+    type:{
+      type:Sequelize.STRING(20),
+      allowNull:false,
+      defaultValue: "dual"
+    }
   },
   {
     timestamps: true,  
   });
 
-  // Définir les associations après la création du modèle
-  Conversations.associate = (models) => {
-    Conversations.belongsTo(models.Users, {
-      foreignKey: 'first_user',
-      as: 'firstUser'
-    });
-
-    Conversations.belongsTo(models.Users, {
-      foreignKey: 'second_user',
-      as: 'secondUser'
-    });
-
-    Conversations.belongsTo(models.Enterprises, {
-      foreignKey: 'enterprise_id',
-      as: 'enterprise'
-    });
-  };
 
   return Conversations;
 };

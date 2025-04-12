@@ -69,7 +69,7 @@ DBConnection.connection.sync({ alter: false, }).then(() => {
   console.log("Database connected");
 });
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+server.listen(process.env.PORT || 5000, "0.0.0.0", () => {
   console.log("Server running on port 3000");
 });
 // process.on('warning', (warning) => {
