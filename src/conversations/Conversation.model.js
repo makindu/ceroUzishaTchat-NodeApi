@@ -20,6 +20,16 @@ module.exports = (sequelize) => {
       onDelete: 'CASCADE',   
       onUpdate: 'CASCADE',   
     },
+    user_id: {
+      type: Sequelize.BIGINT(20).UNSIGNED,
+      allowNull: false,
+      references: {
+        model: Users,  // Nom de la table 'users'
+        key: 'id',
+      },
+      onDelete: 'CASCADE',   
+      onUpdate: 'CASCADE',   
+    },
     second_user: {
       type: Sequelize.BIGINT(20).UNSIGNED,
       allowNull: true,
@@ -40,6 +50,11 @@ module.exports = (sequelize) => {
       onDelete: 'CASCADE',   
       onUpdate: 'CASCADE',   
     },
+     group_avatar: {
+          type: Sequelize.JSON(),
+          allowNull: true,
+          defaultValue: {},
+        },
     status: {
       type: Sequelize.STRING(20),
       allowNull: false,
@@ -47,7 +62,7 @@ module.exports = (sequelize) => {
     },
     group_name:{
       type: Sequelize.TEXT,
-      allowNull: false
+      allowNull: true
     },
     description:{
       type:Sequelize.TEXT,

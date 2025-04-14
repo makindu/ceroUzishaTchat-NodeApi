@@ -81,9 +81,9 @@ UserController.getSingleUser = async (req, res) => {
 };
 UserController.show = async (userid) => {
   try {
-    const userData = await Users.findByPk(userid, {
-      attributes: [`id`, `user_name`, `full_name`, `user_mail`, `user_phone`, `user_type`, `status`, `note`, `avatar`, `uuid`,  `collector` ], // spécifier les champs à retourner
-    });
+    console.log("user id",parseInt(userid));
+    const userData = await Users.findByPk(parseInt(userid), {
+      attributes: allconstant.Userattributes    });
 
     return userData;  // Retourne l'utilisateur avec les champs spécifiés
   } catch (error) {

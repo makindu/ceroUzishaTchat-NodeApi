@@ -145,33 +145,26 @@ ConversationsController.getData = async (req, res) => {
   console.log("getting all data");
 
   let condition = {};
-  if (req.body.user_id) {
+  // if (req.body.user_id) {
     condition = {
       [Op.or]: [
         { first_user: req.body.user_id },
-        { second_user: req.body.user_id }
+        { second_user: req.body.user_id},
       ],
       status: { [Op.ne]: 'deleted' }
     };
-  }
-
-  try {
+    // }
+    
+    try {
+    const groups  = await getUserGoupConversation(req.body.user_id);
     const data = await Conversations.findAll({
       where: condition,
       order: [['createdAt', 'ASC']],
-      attributes: [
-        'id',
-        'first_user',
-        'second_user',
-        'status',
-        'createdAt',
-        'updatedAt',
-        'enterprise_id',
-      ],
+      attributes: allconstant.convesationAttribut
     });
-
-    if (!data || data.length === 0) {
-      return res.status(500).send({ message: "No conversations found", error: null, data: [] });
+console.log("data group when gttinh all ",groups);
+    if (!data || !groups) {
+      return res.status(500).send({ message: "No conversations found  1", error: null, data: [] });
     }
 
     const enrichedConversations = await Promise.all(data.map(async (conversation) => {
@@ -188,19 +181,23 @@ ConversationsController.getData = async (req, res) => {
 
       // Récupération des utilisateurs
       if (conversation.first_user === req.body.user_id) {
-        firstUser = await Users.findByPk(conversation.first_user, {
-          attributes: [
-            'id', 'user_name', 'full_name', 'user_mail', 'user_phone',
+        if (conversation.type === "dual") {
+          firstUser = await Users.findByPk(conversation.first_user, {
+            attributes: [
+              'id', 'user_name', 'full_name', 'user_mail', 'user_phone',
             'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
           ]
         });
-        secondUser = await Users.findByPk(conversation.second_user, {
-          attributes: [
-            'id', 'user_name', 'full_name', 'user_mail', 'user_phone',
-            'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
-          ]
-        });
+          
+          secondUser = await Users.findByPk(conversation.second_user, {
+            attributes: [
+              'id', 'user_name', 'full_name', 'user_mail', 'user_phone',
+              'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
+            ]
+          });
+        }
       } else {
+        if (conversation.type === "dual") {
         firstUser = await Users.findByPk(conversation.second_user, {
           attributes: [
             'id', 'user_name', 'full_name', 'user_mail', 'user_phone',
@@ -213,6 +210,7 @@ ConversationsController.getData = async (req, res) => {
             'user_type', 'status', 'note', 'avatar', 'uuid', 'collector'
           ]
         });
+      }
       }
 
       // Récupération du dernier message avec vérification
@@ -239,6 +237,8 @@ ConversationsController.getData = async (req, res) => {
         }
       });
 
+
+
       return {
         conversation: conversation,
         mediasData: [],
@@ -251,8 +251,77 @@ ConversationsController.getData = async (req, res) => {
       };
     }));
 
-    res.status(200).send({ status: 200, message: "Success", error: null, data: enrichedConversations });
 
+    const formattedGroups = await Promise.all(groups.map(async group => {
+      const conversationId = group.id;
+      const lastMessage = await Messages.findOne({
+        where: {
+          conversation_id: conversationId,
+          status: { [Op.ne]: 'deleted' }
+        },
+        order: [['createdAt', 'DESC']],
+        limit: 1
+      });
+      let createdBy = null;
+      let resultLastMessage = null;
+      if (lastMessage) {
+        resultLastMessage = await findByPkMesssagesIncludeMentionsAndRefs(lastMessage.id);
+        if (resultLastMessage && resultLastMessage.medias) {
+          resultLastMessage.medias = JSON.parse(resultLastMessage.medias);
+        }
+      }
+    
+      // 🔹 Messages non lus pour l'utilisateur connecté
+      const unreadMessagesCount = await Messages.count({
+        where: {
+          conversation_id: conversationId,
+          status: 'unread',
+          receiverId: req.body.user_id
+        }
+      });
+      console.log("user ==============>",group.user_id);
+      const userInitiate = await UserController.show(parseInt(group.user_id));
+      if (userInitiate) {
+        createdBy = userInitiate;
+      }
+    
+      return {
+        conversation: {
+          id: group.id,
+          status: group.status,
+          type: group.type,
+          group_avatar: JSON.parse(group.group_avatar),
+          createdAt: group.createdAt,
+          updatedAt: group.updatedAt,
+          enterprise_id: group.enterprise_id,
+          group_name: group.group_name || null,
+          description: group.description || null,
+          created_by: createdBy, 
+          user_id: group.user_id,
+          first_user: null,
+          second_user: null,
+        },
+        mediasData: [],
+        docsData: [],
+        lastMessage: resultLastMessage,
+        messages: [],
+        firstUser: null,
+        secondUser: null,
+        unreadMessages: unreadMessagesCount,
+        members: group.members 
+      };
+    }));
+    
+    
+    const allConversations = [...enrichedConversations, ...formattedGroups];
+    
+    res.status(200).send({ 
+      status: 200, 
+      message: "Success", 
+      error: null, 
+      data: allConversations 
+    });
+    
   } catch (error) {
     res.status(500).send({ status: 500, message: "Error occurred", error: error.toString(), data: [] });
   }
@@ -266,19 +335,11 @@ ConversationsController.showOne = async (conversation_id,user_id) => {
   try {
     const data = await Conversations.findByPk(
          conversation_id,{ 
-      attributes: [
-        'id',
-        'first_user',
-        'second_user',
-        'status',
-        'createdAt',
-        'updatedAt',
-        'enterprise_id',
-      ], // spécifier les champs à retourner
+      attributes: allconstant.convesationAttribut // spécifier les champs à retourner
     });
 
     if (!data) {
-      return res.status(200).send({ message: "No conversations found", error: null, data: [] });
+      return res.status(200).send({ message: "No conversations found 2", error: null, data: [] });
     }
       let firstUser = null;
       let secondUser = null;
@@ -335,6 +396,7 @@ ConversationsController.showOne = async (conversation_id,user_id) => {
            receiverId: user_id
         }
       });
+      JSON.parse(data.group_avatar);
       const enrichedConversations =  {
         conversation: data,
         lastMessage: lastMessage ? lastMessage : null,
@@ -377,7 +439,60 @@ const getUsersInConversation = async (conversationId) => {
     return [];
   }
 };
+const getUserGoupConversation = async (userId) => {
+  try {
+    // Étape 1 : Récupérer les IDs des conversations où l'utilisateur est membre
+    const participantRecords = await Participer.findAll({
+      where: { id_user: userId },
+      attributes: ['id_conversation']
+    });
 
+    const conversationIds = participantRecords.map(p => p.id_conversation);
+
+    // Étape 2 : Récupérer toutes les conversations + tous les membres avec leurs Users
+    const conversationsGroup = await Conversations.findAll({
+      attributes: allconstant.convesationAttribut,
+      where: { id: conversationIds,type:"group" }, // filtrer seulement les conversations du user
+      include: [
+        {
+          model: Participer,
+          as: 'members',
+          attributes: ['role'],
+          include: [
+            {
+              model: Users,
+              as: 'participants',
+              attributes: allconstant.Userattributes
+            }
+          ]
+        }
+      ]
+    });
+
+    // Formatage pour afficher proprement les membres
+    const formatted = conversationsGroup.map(conversation => {
+      const { members, ...otherData } = conversation.toJSON();
+      const usersOnly = members.map(m => {
+        return {
+          ...m.participants,
+          role: m.role 
+        };
+      });
+      JSON.parse(otherData.group_avatar);
+      return {
+        ...otherData,
+        members: usersOnly
+      };
+    });
+
+    console.log("groupe data", formatted);
+    return formatted;
+
+  } catch (error) {
+    console.error('Erreur lors de la récupération des groupes d\'utilisateur :', error);
+    return [];
+  }
+};
 showOneConversation = async (conversation_id,user_id,type) => {
   console.log("getting all data ", type);
 
@@ -390,7 +505,7 @@ showOneConversation = async (conversation_id,user_id,type) => {
     });
 
     if (!data) {
-      return res.status(200).send({ message: "No conversations found", error: null, data: [] });
+      return res.status(200).send({ message: "No conversations found 3", error: null, data: [] });
     }
       let firstUser = null;
       let secondUser = null;
@@ -447,15 +562,19 @@ showOneConversation = async (conversation_id,user_id,type) => {
            receiverId: user_id
         }
       });
-      const userMember = await getUsersInConversation(data.id);
-      console.log("user member", userMember);
+      const usersMember = await getUsersInConversation(data.id);
+      const groupeInitiate = await UserController.show(parseInt(data.user_id));
+      console.log("user member", usersMember);
+      console.log("data convesation goup avatar",data);
+      JSON.parse(data.dataValues.group_avatar);
       const enrichedConversations =  {
         conversation: data,
+        created_by: groupeInitiate,
         lastMessage: lastMessage ? lastMessage : null,
         messages : [],
         firstUser: firstUser ? firstUser : null,
         secondUser: secondUser ? secondUser : null,
-        members : type === 'group' ? userMember : null,
+        members : type === 'group' ? usersMember : [],
         unreadMessages: unreadMessagesCount
       };
    
@@ -465,7 +584,6 @@ showOneConversation = async (conversation_id,user_id,type) => {
     return json( { message: "error" , error: error.toString(), data :  null});
   }
 };
-
 ConversationsController.deletePermanently = async (req, res) => {
   const { conversation_id } = req.params;  
 
@@ -492,7 +610,6 @@ ConversationsController.deletePermanently = async (req, res) => {
     });
   }
 };
-
 ConversationsController.getSingleConversations = async (req, res) => {
   // let condition = {};
   // if (req.params.id) {
@@ -515,7 +632,6 @@ ConversationsController.getSingleConversations = async (req, res) => {
       .send({ message: "Error occured", error: error.toString(), data: [] });
   }
 };
-
 ConversationsController.updateConversations = async (req, res) => {
   if (!req.params.id) {
     res
@@ -600,6 +716,56 @@ return;
 }
 
 }
+GroupExist = async (conversationId)=>{
+  try {
+    const conversation = Conversations.findByPk(conversationId);
+    if (conversation) {
+        return {
+          data: conversation,
+          status: true,
+          error:null
+        }
+    }
+    else{
+      return {
+        data: null,
+        status: false,
+        error:"error while getting convrsation"
+      }
+    }
+  } catch (error) {
+    return {
+      data: null,
+      status: false,
+      error:error.toString()
+    }
+  }
+};
+ConversationsController.ConversationOnExist = async (conversationId)=>{
+  try {
+    const conversation = Conversations.findByPk(conversationId);
+    if (conversation) {
+        return {
+          data: conversation,
+          status: true,
+          error:null
+        }
+    }
+    else{
+      return {
+        data: null,
+        status: false,
+        error:"error while getting convrsation"
+      }
+    }
+  } catch (error) {
+    return {
+      data: null,
+      status: false,
+      error:error.toString()
+    }
+  }
+};
 ConversationsController.conversationExist = async (element) => {
   try {
     const condition = {
@@ -680,6 +846,7 @@ ConversationsController.conversationExist = async (element) => {
   }
 };
 ConversationsController.createGroup = async (req,res)=>{
+  console.log("avatar ===============", req.body.group_avatar);
 
   if (!req.body || !req.body.members ) {
     res
@@ -688,6 +855,7 @@ ConversationsController.createGroup = async (req,res)=>{
   return;
   }
   let transaction = await connection.transaction();
+  let UsersIs = [];
   try {
     let  conversation = await Conversations.create(req.body);
     let data = {};
@@ -697,9 +865,9 @@ ConversationsController.createGroup = async (req,res)=>{
           const User = req.body.members[index];
           const userfound =  await UserController.userExists({id:User.id});
           if (userfound) {
-            const socketId = getUserSocketId(User.id);
-              let groupdata = {
-                id_user : User.id,
+            UsersIs.push(User.id);
+            let groupdata = {
+              id_user : User.id,
                 id_conversation : conversation.id,
                 role: User.id === req.body.user_id ? "admin" : "writter"
               };
@@ -708,29 +876,10 @@ ConversationsController.createGroup = async (req,res)=>{
                 
                 const convesationFormat = await showOneConversation(conversation.id,User.id,req.body.type);
                 if (convesationFormat) {
-                  
-                  data = convesationFormat;
-                
-                  
-                        
-                          if (socketId) {
-                            getIo().to(socketId).emit("new_conversation", {
-                              conversation: data,
-                            });
-                          }
-                        
-                      // const sendersocketId = getUserSocketId(userId);
-                      //     if (socketId) {
-                      //       getIo().to(sendersocketId).emit("new_message", {
-                      //         message: messagewhithNentionAndReferences,
-                      //       });
-                      //     }
-                   
-                  
                   console.log("participant convrsation", convesationFormat);
+                  data = convesationFormat;
+                  
                 }
-              
-
           }
           else{
             await transaction.rollback();
@@ -743,6 +892,16 @@ ConversationsController.createGroup = async (req,res)=>{
     }
     
   } ;
+
+  UsersIs.map((id)=>{
+    // JSON.stringify(data.conversation.connection.group_avatar);
+    const socketId = getUserSocketId(id);
+    if (socketId) {
+      getIo().to(socketId).emit("new_conversation", {
+        conversation: data,
+      });
+    }
+  });
   
   await  transaction.commit();
                   res
@@ -759,6 +918,70 @@ ConversationsController.createGroup = async (req,res)=>{
   
 
 
+};
+ConversationsController.setrole = async (req,res)=>{
+  if (!req.body) {
+    res.status(500).send({message:"Error",error:"some date are required", data:null }
+    );
+    return;
+  }
+  if(!req.body.memberId){
+    res.status(500).send({message:"Error", error:"user to update required", data:null  });
+    return;
+  }
+  if(!req.body.conversation_id){
+    res.status(500).send({message:"Error", error:"any conversation should be provided", data:null  });
+    return;
+  }
+  try {
+    const conversationExist = await GroupExist(req.body.conversation_id);
+    if (conversationExist.status) 
+    {
+      let condition = {
+        [Op.and]:[
+          {
+            id_conversation:conversationExist.data.id
+          },
+          {
+            id_user : req.body.memberId
+          }
+        ],
+        type: { [Op.ne]: 'dual' }
+      };
+      let data = {
+        role : req.body.newRole
+      };
+      const newRole = Participer.update(role,{where: condition});
+      if (newRole){
+        const userConcerned =  await UserController.show(req.body.user_id);
+        const result =  await showOneConversation(conversationExist.data.id,req.body.user_id,conversationExist.data.type);
+        if (result) {
+          res.status(200).send({message:"Successhghgh", error:null,data:result});
+          result.members.map((member)=>{
+            const socketUsers = getUserSocketId(member.id);
+            if (socketUsers) {
+              getIo().to(socketId).emit("new_role_setting", {
+                data: result,
+                message: "l'utilisateur"+userConcerned.user_name+"est desormain"+result.role
+              });
+            }
+          });
+          return;
+        }else{
+          res.status(400).send({message:"Error", error:"problem when loading data",data:null});
+
+        }
+      }
+  else{
+    console.log("error when tring to update");
+  }
+    }
+    else{
+      res.status(400).send({message:"Error",error:conversationExist.error.toString(), data:null })
+    }
+  } catch (error) {
+    res.status(400).send({message:"Error",error:error.toString(), data:null });
+  }
 }
 
 

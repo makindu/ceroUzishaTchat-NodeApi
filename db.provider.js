@@ -48,6 +48,7 @@ messageReference.belongsTo(messages, { as: 'message', foreignKey: 'message_id' }
 Enterprises.hasMany(usersenterprises, { foreignKey: "enterprise_id", as: "enterpriseUsers" });
 usersenterprises.belongsTo(Enterprises, { foreignKey: "enterprise_id", as: "enterprise" });
 Participer.belongsTo(Users, {foreignKey : "id_user", as :"participants" });
+Conversations.hasMany(Participer,{foreignKey: "id_conversation" , as :"members"});
 customer.belongsTo(Enterprises, { foreignKey: 'enterprise_id' });
 
 // Relations / associations

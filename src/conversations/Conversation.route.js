@@ -10,5 +10,6 @@ router.get("delete/:id", ConversationsController.deletePermanently);
 router.get("/messages/:conversationId", ConversationsController.messages);
 // router.post("/send_message", ConversationsController.create);
 router.put("/:id", ConversationsController.updateConversations);
+router.put("/rew_role", ConversationsController.setrole);
 
 module.exports = router;
