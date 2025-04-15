@@ -32,6 +32,11 @@ module.exports = (sequelize) => {
       allowNull: false, 
       defaultValue : 'writter',  
     },
+    status : {
+      type: Sequelize.STRING(20),
+      defaultValue: "activatd",
+      allowNull: false, 
+    },
   created_at: {
       type: Sequelize.DATE,
       defaultValue: Sequelize.NOW,

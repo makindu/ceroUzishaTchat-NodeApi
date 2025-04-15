@@ -1,4 +1,4 @@
-const  {Users , Enterprises,usersenterprises } = require('../../db.provider');
+const { Users, Enterprises, usersenterprises } = require('../../db.provider');
 const { Op } = require("sequelize");
 const allconstant = require('../constantes');
 const users = {};
@@ -9,10 +9,10 @@ const UserController = {};
  * @param {Object} filter 
  * @returns {Promise<boolean>}
  */
-UserController.userExists  = async (filter) =>{
+UserController.userExists = async (filter) => {
   try {
-    const user = await Users.findOne({ where: filter , attributes: allconstant.Userattributes });
-    return !!user; 
+    const user = await Users.findOne({ where: filter, attributes: allconstant.Userattributes });
+    return !!user;
   } catch (error) {
     console.error("Erreur lors de la vérification de l'utilisateur :", error);
     return false;
@@ -81,9 +81,10 @@ UserController.getSingleUser = async (req, res) => {
 };
 UserController.show = async (userid) => {
   try {
-    console.log("user id",parseInt(userid));
+    console.log("user id", parseInt(userid));
     const userData = await Users.findByPk(parseInt(userid), {
-      attributes: allconstant.Userattributes    });
+      attributes: allconstant.Userattributes
+    });
 
     return userData;  // Retourne l'utilisateur avec les champs spécifiés
   } catch (error) {
@@ -94,7 +95,7 @@ UserController.show = async (userid) => {
 UserController.showByEnterprisee = async (enterprise_id) => {
   try {
     const userData = await Users.findByPk(userid, {
-      attributes: [`id`, `user_name`, `full_name`, `user_mail`, `user_phone`, `user_type`, `status`, `note`, `avatar`, `uuid`,  `collector` ], // spécifier les champs à retourner
+      attributes: [`id`, `user_name`, `full_name`, `user_mail`, `user_phone`, `user_type`, `status`, `note`, `avatar`, `uuid`, `collector`], // spécifier les champs à retourner
     });
 
     return userData;  // Retourne l'utilisateur avec les champs spécifiés
@@ -132,18 +133,18 @@ UserController.getEnabledUsersByEnterprise = async (enterpriseId) => {
       include: [
         {
           model: usersenterprises,
-          as: "userEnterprises", 
-          where: { enterprise_id: enterpriseId }, 
+          as: "userEnterprises",
+          where: { enterprise_id: enterpriseId },
           // attributes: allconstant.Userattributes, 
         },
       ],
       where: { status: "enabled" }, // Filtrer par statut
     });
     // console.log("data",users)
-    return {data:users,error: null, message:"success" };
-    } catch (error) {
-      
-    return {data:null,error: error.toString(), message:"error" };
+    return { data: users, error: null, message: "success" };
+  } catch (error) {
+
+    return { data: null, error: error.toString(), message: "error" };
   }
 };
 module.exports = UserController;

@@ -8,8 +8,8 @@ router.post("/libraryMedias", ConversationsController.getConversationMedias);
 router.post("/new_group", ConversationsController.createGroup);
 router.get("delete/:id", ConversationsController.deletePermanently);
 router.get("/messages/:conversationId", ConversationsController.messages);
-// router.post("/send_message", ConversationsController.create);
-router.put("/:id", ConversationsController.updateConversations);
-router.put("/rew_role", ConversationsController.setrole);
+router.post("/group/set_member", ConversationsController.setNewMember);
+router.put("/update/:id", ConversationsController.updateConversations);
+router.put("/group/update_members", ConversationsController.updatedParticipantGroup);
 
 module.exports = router;
