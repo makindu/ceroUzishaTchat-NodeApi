@@ -412,11 +412,11 @@ ConversationsController.showOne = async (conversation_id, user_id) => {
     return json({ message: "error", data: null });
   }
 };
-const getUsersInConversation = async (conversationId) => {
+const getUsersInConversation = async (id,criterial) => {
   try {
     const participants = await Participer.findAll({
-      attributes: ['role'],
-      where: { id_conversation: conversationId },
+      attributes: ['role',"status"],
+      where: criterial === "conversation"?{ id_conversation: id }:{id_user:id,id_conversation:id},
       include: [
         {
           model: Users,
@@ -428,6 +428,7 @@ const getUsersInConversation = async (conversationId) => {
     const members = participants.map(p => {
       return {
         role: p.role,
+        memberStatus:p.status,
         ...p.participants?.dataValues
       };
     });
@@ -498,7 +499,8 @@ showOneConversation = async (conversation_id, user_id) => {
     });
 
     if (!data) {
-      return res.status(200).send({ message: "No conversations found 3", error: null, data: [] });
+      return 
+      // res.status(200).send({ message: "No conversations found 3", error: null, data: [] });
     }
     let firstUser = null;
     let secondUser = null;
@@ -555,7 +557,7 @@ showOneConversation = async (conversation_id, user_id) => {
         receiverId: user_id
       }
     });
-    const usersMember = await getUsersInConversation(data.id);
+    const usersMember = await getUsersInConversation(data.id,"conversation");
     const groupeInitiate = await UserController.show(parseInt(data.user_id));
     console.log("user member", usersMember);
     console.log("data convesation goup avatar", data);
@@ -638,7 +640,7 @@ ConversationsController.updateConversations = async (req, res) => {
 
     let conversationdata =  await showOneConversation(req.params.id, req.body.user_id);
     if (conversationdata) {
-      // console.log("avatar data ========================> before",conversationdata.conversation.group_avatar);
+      console.log("avatar data ========================> before",conversationdata.conversation.type );
 
       if (conversationdata.conversation.type === "group") {
         const usersInside = await Participer.findAll({ where: { id_conversation: conversationdata.conversation.id } });
@@ -1018,31 +1020,41 @@ ConversationsController.updatedParticipantGroup = async (req, res) => {
     if (!conversationExist.status) {
       res.status(400).send({ message: "Error", error: conversationExist.error.toString(), data: null });
       return ;
-    }
-
-    const updates =  await Promise.all( req.body.members.map(async (members) => {
-      console.log("conversation found for updating participant", await conversationExist.data.conversations.id);
+    };
+    let membresData = [];
+    const updates =  await Promise.all( req.body.members.map(async (member) => {
+      
+      // console.log("conversation found for updating participant", await conversationExist.data.conversations);
       let condition = {
         [Op.and]: [
-          { id_conversation: await conversationExist.data.id },
-          { id_user: members }
+          { id_conversation: req.body.conversation_id },
+          { id_user: member }
         ],
-        type: { [Op.ne]: 'dual' }
+        status: { [Op.ne]: 'desable' }
       };
-      return Participer.update(req.body , { where: condition });
+
+      let participant = Participer.update(req.body , { where: condition });
+      if (participant) {
+       let userUpdated  = await getUsersInConversation(member,"user");
+       if (userUpdated) {
+        membresData.push(userUpdated);
+       }
+        return participant
+      }else{
+        return participant
+      }
     }));
 
-    // updates);
-
-    // On suppose ici que req.body.user_id est celui qui a déclenché le changement
-    const userConcerned = await UserController.show(req.body.user_id);
-    const result = await showOneConversation(conversationExist.data.id, req.body.user_id, conversationExist.data.type);
+    if(updates){
+      const userConcerned = await UserController.show(req.body.user_id);
+    const result = await showOneConversation(req.body.conversation_id, req.body.user_id, conversationExist.data.type);
     let requestObjetct = Object.keys(req.body);
     let motif = "";
+    
+    console.log("user found in conversations",result);
     if (result) {
-      res.status(200).send({ message: "Success", error: null, data: result });
       if ( requestObjetct.includes("role") ) {
-         motif = " changé des rôles";
+        motif = " changé des rôles";
       }else if (requestObjetct.includes("status")){
         motif = "Supprimer  du groupe";
       }else{
@@ -1051,19 +1063,23 @@ ConversationsController.updatedParticipantGroup = async (req, res) => {
       result.members.map((member) => {
         const socketId = getUserSocketId(member.id);
         if (socketId) {
-          getIo().to(socketId).emit("new_role_setting", {
-            data: result,
+          getIo().to(socketId).emit("change_paticipant_infos", {
+            data: membresData,
             message: `L'utilisateur ${userConcerned.user_name} a été${motif}`
           });
         }
       });
-
+      
+      res.status(200).send({ message: "Success", error: null, data: membresData });
       return;
     } else {
       res.status(400).send({ message: "Error", error: "Problem when loading data", data: null });
       return 
     }
-
+    }else{
+      res.status(400).send({ message: "Error", error: "Problem when updating data", data: null });
+      return 
+    }
   } 
   catch (error) {
     res.status(400).send({ message: "Error", error: error.toString(), data: null });
@@ -1111,7 +1127,7 @@ ConversationsController.updatedParticipantGroup = async (req, res) => {
 //           result.members.map((member) => {
 //             const socketUsers = getUserSocketId(member.id);
 //             if (socketUsers) {
-//               getIo().to(socketId).emit("new_role_setting", {
+//               getIo().to(socketId).emit("change_paticipant_infos", {
 //                 data: result,
 //                 message: "l'utilisateur" + userConcerned.user_name + "est desormain" + result.role
 //               });
