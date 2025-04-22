@@ -54,6 +54,10 @@ module.exports = (sequelize) => {
       type: Sequelize.STRING,
       allowNull: true,
     },
+    members_read_it: {
+      type: Sequelize.JSON(),
+      allowNull: true,
+    },
     ResponseId: {
       type: Sequelize.BIGINT(20),
       allowNull: true,

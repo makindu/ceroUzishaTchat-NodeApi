@@ -20,6 +20,16 @@ module.exports = (sequelize) => {
       onDelete: 'CASCADE',   
       onUpdate: 'CASCADE',   
     },
+    user_id: {
+      type: Sequelize.BIGINT(20).UNSIGNED,
+      allowNull: false,
+      references: {
+        model: Users,  // Nom de la table 'users'
+        key: 'id',
+      },
+      onDelete: 'CASCADE',   
+      onUpdate: 'CASCADE',   
+    },
     second_user: {
       type: Sequelize.BIGINT(20).UNSIGNED,
       allowNull: true,
@@ -40,33 +50,34 @@ module.exports = (sequelize) => {
       onDelete: 'CASCADE',   
       onUpdate: 'CASCADE',   
     },
+     group_avatar: {
+          type: Sequelize.JSON(),
+          allowNull: true,
+          defaultValue: {},
+        },
     status: {
-      type: Sequelize.STRING,
+      type: Sequelize.STRING(20),
       allowNull: false,
       defaultValue: "activated"
     },
+    group_name:{
+      type: Sequelize.TEXT,
+      allowNull: true
+    },
+    description:{
+      type:Sequelize.TEXT,
+      allowNull:true
+    },
+    type:{
+      type:Sequelize.STRING(20),
+      allowNull:false,
+      defaultValue: "dual"
+    }
   },
   {
     timestamps: true,  
   });
 
-  // Définir les associations après la création du modèle
-  Conversations.associate = (models) => {
-    Conversations.belongsTo(models.Users, {
-      foreignKey: 'first_user',
-      as: 'firstUser'
-    });
-
-    Conversations.belongsTo(models.Users, {
-      foreignKey: 'second_user',
-      as: 'secondUser'
-    });
-
-    Conversations.belongsTo(models.Enterprises, {
-      foreignKey: 'enterprise_id',
-      as: 'enterprise'
-    });
-  };
 
   return Conversations;
 };

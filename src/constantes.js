@@ -14,7 +14,10 @@ allconstant.messageattributes = [
 'enterprise_id',
 'conversation_id',
 'status',
-'ResponseId'
+'members_read_it',
+'ResponseId',
+'updatedAt',
+'createdAt'
 ];
 allconstant.mentionsattribute =  [
   
@@ -27,6 +30,20 @@ allconstant.refeencesattribute = [
 'message_id',
 'reference_type',
 'reference_code',
+];
+allconstant.convesationAttribut = [
+"id",
+"status",
+"first_user",
+"second_user",
+"group_name",
+"group_avatar",
+"description",
+"type",
+"user_id",
+"createdAt",
+"updatedAt",
+"enterprise_id",
 ]
 allconstant.capitalizeFirstLetter = (input) => {
   if (!input) return '';
