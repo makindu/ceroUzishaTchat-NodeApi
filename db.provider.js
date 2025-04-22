@@ -50,6 +50,7 @@ usersenterprises.belongsTo(Enterprises, { foreignKey: "enterprise_id", as: "ente
 Participer.belongsTo(Users, {foreignKey : "id_user", as :"participants" });
 Conversations.hasMany(Participer,{foreignKey: "id_conversation" , as :"members"});
 customer.belongsTo(Enterprises, { foreignKey: 'enterprise_id' });
+Participer.belongsTo(Conversations, {foreignKey: 'id_conversation'});
 
 // Relations / associations
 Expenditures.belongsTo( Users, { foreignKey: 'user_id' });

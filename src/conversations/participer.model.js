@@ -47,10 +47,21 @@ module.exports = (sequelize) => {
       defaultValue: Sequelize.NOW,
       allowNull: false,
     },
+    
+    
   }, {
     tableName: 'participer',
-    timestamps: false,  
+    timestamps: false,
   });
+  // Participer.associate = (models) => {
+    // Participer.belongsTo(models.Users, {
+    //   foreignKey: 'id_user',
+    //   as: 'participants'
+    // });
+    // Participer.belongsTo(models.Conversations, {
+    //   foreignKey: 'id_conversation'
+    // });
+  // };
 
   return Participer;
 };

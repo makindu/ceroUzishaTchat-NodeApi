@@ -326,7 +326,6 @@ ConversationsController.getData = async (req, res) => {
     res.status(500).send({ status: 500, message: "Error occurred", error: error.toString(), data: [] });
   }
 };
-
 ConversationsController.showOne = async (conversation_id, user_id) => {
   console.log("getting all data");
 
@@ -412,28 +411,39 @@ ConversationsController.showOne = async (conversation_id, user_id) => {
     return json({ message: "error", data: null });
   }
 };
-const getUsersInConversation = async (id,criterial) => {
+const getUsersInConversation = async (id, criterial, user_id) => {
   try {
+    const whereClause = criterial === "conversation"
+      ? { id_conversation: id }
+      : { id_user: user_id, id_conversation: id };
+
     const participants = await Participer.findAll({
-      attributes: ['role',"status"],
-      where: criterial === "conversation"?{ id_conversation: id }:{id_user:id,id_conversation:id},
+      attributes: ['role', 'status'],
+      where: whereClause,
       include: [
         {
           model: Users,
           as: 'participants',
-          attributes: allconstant.Userattributes
+          attributes: allconstant.Userattributes,
+          required: true
         }
-      ],
-    });
-    const members = participants.map(p => {
-      return {
-        role: p.role,
-        memberStatus:p.status,
-        ...p.participants?.dataValues
-      };
+      ]
     });
 
-    return members;
+    // Nettoyage des doublons avec Map
+    const uniqueMembersMap = new Map();
+    participants.forEach(p => {
+      const userId = p.participants?.id;
+      if (!uniqueMembersMap.has(userId)) {
+        uniqueMembersMap.set(userId, {
+          role: p.role,
+          memberStatus: p.status,
+          ...p.participants?.dataValues
+        });
+      }
+    });
+
+    return Array.from(uniqueMembersMap.values());
 
   } catch (error) {
     console.error('Erreur lors de la récupération des participants :', error);
@@ -491,16 +501,22 @@ const getUserGoupConversation = async (userId) => {
     return [];
   }
 };
-showOneConversation = async (conversation_id, user_id) => {
+let showOneConversation = async (conversation_id, user_id,transaction ) => {
+  // console.warn("convesation user and convesation id ===>",conversation_id,user_id);
   try {
-    const data = await Conversations.findByPk(
-      conversation_id, {
-      attributes: allconstant.convesationAttribut // spécifier les champs à retourner
+    let data = await Conversations.findByPk(
+     parseInt(conversation_id), {
+      attributes: allconstant.convesationAttribut,
+      transaction: transaction 
     });
-
+// console.warn("data con vsation show one ============>", data)
     if (!data) {
+      console.log("message =No conversations found 3 ");
       return 
       // res.status(200).send({ message: "No conversations found 3", error: null, data: [] });
+    }else{
+      console.log("message conversations found 3 ==================> ", data);
+
     }
     let firstUser = null;
     let secondUser = null;
@@ -557,11 +573,11 @@ showOneConversation = async (conversation_id, user_id) => {
         receiverId: user_id
       }
     });
-    const usersMember = await getUsersInConversation(data.id,"conversation");
+    const usersMember = await getUsersInConversation(data.id,"conversation",user_id);
     const groupeInitiate = await UserController.show(parseInt(data.user_id));
-    console.log("user member", usersMember);
-    console.log("data convesation goup avatar", data);
-    JSON.parse(data.dataValues.group_avatar);
+    // console.log("user member", usersMember);
+    // console.log("data convesation goup avatar", data);
+    // JSON.parse(data.dataValues.group_avatar);
     const enrichedConversations = {
       conversation: data,
       created_by: groupeInitiate,
@@ -922,97 +938,132 @@ ConversationsController.conversationExist = async (element) => {
       error: error.toString()
     };
   }
-};
-ConversationsController.createGroup = async (req, res) => {
-  console.log("avatar ===============", req.body.group_avatar);
+};ConversationsController.createGroup = async (req, res) => {
+  const { members, user_id, type, group_avatar, ...conversationData } = req.body;
 
-  if (!req.body || !req.body.members) {
-    res
-      .status(500)
-      .send({ message: "Error", error: "some data required", data: null });
-    return;
+  if (!members || !Array.isArray(members) || members.length === 0 || !user_id || !type) {
+    return res.status(400).send({
+      message: "Error",
+      error: "Missing required fields",
+      data: null,
+    });
   }
-  let transaction = await connection.transaction();
-  let UsersIs = [];
+
+  const transaction = await connection.transaction();
+  const UsersIs = [];
+  let dataInResponse = [];
+
   try {
-    let conversation = await Conversations.create(req.body);
-    let data = {};
-    if (conversation) {
-      for (let index = 0; index < req.body.members.length; index++) {
-        const User = req.body.members[index];
-        const userfound = await UserController.userExists({ id: User.id });
-        if (userfound) {
-          UsersIs.push(User.id);
-          let groupdata = {
-            id_user: User.id,
-            id_conversation: conversation.id,
-            role: User.id === req.body.user_id ? "admin" : "writter"
-          };
-          let userInConversation = await Participer.create(groupdata);
-          if (userInConversation) {
+    const conversation = await Conversations.create(req.body, { transaction });
 
-            const convesationFormat = await showOneConversation(conversation.id, User.id, req.body.type);
-            if (convesationFormat) {
-              console.log("participant convrsation", convesationFormat);
-              data = convesationFormat;
+    if (!conversation) {
+      await transaction.rollback();
+      return res.status(500).send({
+        message: "Error",
+        error: "Failed to create conversation",
+        data: null,
+      });
+    }
 
-            }
-          }
-          else {
-            await transaction.rollback();
-            res
-              .status(400)
-              .send({ message: "Error", error: "User not fount", data: null });
-            return;
-            // }
-          }
-        }
+    for (let index = 0; index < members.length; index++) {
+      const user = members[index];
+      const userfound = await UserController.userExists({ id: user.id });
 
+      if (!userfound) {
+        await transaction.rollback();
+        return res.status(404).send({
+          message: "Error",
+          error: `User with ID ${user.id} not found`,
+          data: null,
+        });
+      }
+
+      UsersIs.push(user.id);
+
+      const groupData = {
+        id_user: user.id,
+        id_conversation: conversation.id,
+        role: user.id === user_id ? "admin" : "writter",
+        status: user.status
       };
 
-      UsersIs.map((id) => {
-        // JSON.stringify(data.conversation.connection.group_avatar);
-        const socketId = getUserSocketId(id);
-        if (socketId) {
-          getIo().to(socketId).emit("new_conversation", {
-            conversation: data,
-          });
-        }
+      await Participer.findOrCreate({
+        where: {
+          id_user: user.id,
+          id_conversation: conversation.id
+        },
+        defaults: groupData,
+        transaction
       });
-
-      await transaction.commit();
-      res
-        .status(200)
-        .send({ message: "Success", error: null, data: data });
-      return;
     }
+    const conversationFormat1 = await showOneConversation(conversation.id, user_id, transaction);
+
+    if (conversationFormat1) {
+      conversationFormat1.conversation.group_avatar = JSON.parse(conversationFormat1.conversation.group_avatar);
+      dataInResponse.push(conversationFormat1);
+    }
+
+    // OU ✅ OPTION 2 : Commit d'abord, puis appeler sans transaction
+    // await transaction.commit();
+    // const conversationFormat2 = await showOneConversation(conversation.id, user_id);
+    // if (conversationFormat2) {
+    //   dataInResponse.push(conversationFormat2);
+    // }
+
+    // OU ✅ OPTION 3 : Construction manuelle simplifiée (exemple de fallback minimal)
+    // dataInResponse.push({
+    //   conversation,
+    //   created_by: await UserController.show(user_id),
+    //   members: members.map(m => ({ ...m, id_conversation: conversation.id })),
+    //   lastMessage: null,
+    //   unreadMessages: 0,
+    // });
+
+    await Promise.all(UsersIs.map( async (id) => {
+      const socketId = getUserSocketId(id);
+      if (socketId) {
+        // console.log("user to alert whith socket ===============> i"+id, socketId);
+        getIo().to(socketId).emit("new_conversation", {
+          conversation: dataInResponse[0],
+        });
+      }else{
+
+        // console.log("user to alert whith socket ===============> i"+id, socketId);
+      }
+    }));
+
+    
+    res.status(200).send({
+      message: "Success",
+      error: null,
+      data: dataInResponse[0],
+    });
+    await transaction.commit(); 
+
   } catch (error) {
     await transaction.rollback();
-    res
-      .status(400)
-      .send({ message: "Error", error: error.toString(), data: null });
-    return;
+    console.error("Erreur lors de la création du groupe :", error);
+    return res.status(500).send({
+      message: "Error",
+      error: error.message || "Internal Server Error",
+      data: null,
+    });
   }
-
-
-
 };
 ConversationsController.updatedParticipantGroup = async (req, res) => {
-  if (!req.body) {
+  if (!req.body) 
+  {
     res.status(500).send({ message: "Error", error: "some data are required", data: null });
     return ;
   }
-
   if (!req.body.members || req.body.members.length === 0) {
     res.status(500).send({ message: "Error", error: "members to update required", data: null });
     return ;
   }
-
   if (!req.body.conversation_id) {
     res.status(500).send({ message: "Error", error: "conversation must be provided", data: null });
     return ;
   }
-
   try 
   {
     const conversationExist = await GroupExist(req.body.conversation_id);
@@ -1023,8 +1074,6 @@ ConversationsController.updatedParticipantGroup = async (req, res) => {
     };
     let membresData = [];
     const updates =  await Promise.all( req.body.members.map(async (member) => {
-      
-      // console.log("conversation found for updating participant", await conversationExist.data.conversations);
       let condition = {
         [Op.and]: [
           { id_conversation: req.body.conversation_id },
@@ -1033,9 +1082,9 @@ ConversationsController.updatedParticipantGroup = async (req, res) => {
         status: { [Op.ne]: 'desable' }
       };
 
-      let participant = Participer.update(req.body , { where: condition });
+      let participant = await Participer.update(req.body,{ where: condition });
       if (participant) {
-       let userUpdated  = await getUsersInConversation(member,"user");
+       let userUpdated  = await getUsersInConversation(req.body.conversation_id,"user",member);
        if (userUpdated) {
         membresData.push(userUpdated);
        }
@@ -1047,11 +1096,10 @@ ConversationsController.updatedParticipantGroup = async (req, res) => {
 
     if(updates){
       const userConcerned = await UserController.show(req.body.user_id);
-    const result = await showOneConversation(req.body.conversation_id, req.body.user_id, conversationExist.data.type);
+    const result = await showOneConversation(req.body.conversation_id, req.body.user_id, "group");
     let requestObjetct = Object.keys(req.body);
     let motif = "";
-    
-    console.log("user found in conversations",result);
+    // console.log("user found in conversations",result);
     if (result) {
       if ( requestObjetct.includes("role") ) {
         motif = " changé des rôles";
@@ -1073,11 +1121,11 @@ ConversationsController.updatedParticipantGroup = async (req, res) => {
       res.status(200).send({ message: "Success", error: null, data: membresData });
       return;
     } else {
-      res.status(400).send({ message: "Error", error: "Problem when loading data", data: null });
+      res.status(400).send({ message: "Error", error: "Problem when loading data 1", data: null });
       return 
     }
     }else{
-      res.status(400).send({ message: "Error", error: "Problem when updating data", data: null });
+      res.status(400).send({ message: "Error", error: "Problem when updating data 2", data: null });
       return 
     }
   } 
@@ -1086,70 +1134,6 @@ ConversationsController.updatedParticipantGroup = async (req, res) => {
     return 
   }
 };
-
-// ConversationsController.setrole = async (req, res) => {
-//   if (!req.body) {
-//     res.status(500).send({ message: "Error", error: "some date are required", data: null }
-//     );
-//     return;
-//   }
-//   if (!req.body.members) {
-//     res.status(500).send({ message: "Error", error: "user to update required", data: null });
-//     return;
-//   }
-//   if (!req.body.conversation_id) {
-//     res.status(500).send({ message: "Error", error: "any conversation should be provided", data: null });
-//     return;
-//   }
-//   try {
-//     const conversationExist = await GroupExist(req.body.conversation_id);
-//     if (conversationExist.status) {
-//       let condition = {
-//         [Op.and]: [
-//           {
-//             id_conversation: conversationExist.data.id
-//           },
-//           {
-//             id_user: req.body.members
-//           }
-//         ],
-//         type: { [Op.ne]: 'dual' }
-//       };
-//       let data = {
-//         role: req.body.newRole
-//       };
-//       const newRole = Participer.update(req.body, { where: condition });
-//       if (newRole) {
-//         const userConcerned = await UserController.show(req.body.user_id);
-//         const result = await showOneConversation(conversationExist.data.id, req.body.user_id, conversationExist.data.type);
-//         if (result) {
-//           res.status(200).send({ message: "Successhghgh", error: null, data: result });
-//           result.members.map((member) => {
-//             const socketUsers = getUserSocketId(member.id);
-//             if (socketUsers) {
-//               getIo().to(socketId).emit("change_paticipant_infos", {
-//                 data: result,
-//                 message: "l'utilisateur" + userConcerned.user_name + "est desormain" + result.role
-//               });
-//             }
-//           });
-//           return;
-//         } else {
-//           res.status(400).send({ message: "Error", error: "problem when loading data", data: null });
-
-//         }
-//       }
-//       else {
-//         console.log("error when tring to update");
-//       }
-//     }
-//     else {
-//       res.status(400).send({ message: "Error", error: conversationExist.error.toString(), data: null })
-//     }
-//   } catch (error) {
-//     res.status(400).send({ message: "Error", error: error.toString(), data: null });
-//   }
-// };
 ConversationsController.setNewMember = async (req,res)=>{
 
   if (!req.body.members) {
