@@ -28,5 +28,6 @@ server.listen(process.env.PORT || 5000, "0.0.0.0", () => {
 // TRUNCATE `message_mentions`;
 // TRUNCATE `conversations`;
 // TRUNCATE `messages`
+// TRUNCATE `participer`
 
 // module.exports = IO;

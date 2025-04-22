@@ -296,11 +296,11 @@ ConversationsController.getData = async (req, res) => {
           enterprise_id: group.enterprise_id,
           group_name: group.group_name || null,
           description: group.description || null,
-          created_by: createdBy,
           user_id: group.user_id,
           first_user: null,
           second_user: null,
         },
+        created_by: createdBy,
         mediasData: [],
         docsData: [],
         lastMessage: resultLastMessage,
@@ -417,6 +417,10 @@ const getUsersInConversation = async (id, criterial, user_id) => {
       ? { id_conversation: id }
       : { id_user: user_id, id_conversation: id };
 
+      // const rawParticipants = await Participer.findAll({
+      //   where: { id_conversation: id }
+      // });
+      // console.log("Raw participants only from Participer table ===>", rawParticipants);
     const participants = await Participer.findAll({
       attributes: ['role', 'status'],
       where: whereClause,
@@ -429,8 +433,7 @@ const getUsersInConversation = async (id, criterial, user_id) => {
         }
       ]
     });
-
-    // Nettoyage des doublons avec Map
+    console.log("les participant sont ======================>  clause", whereClause );
     const uniqueMembersMap = new Map();
     participants.forEach(p => {
       const userId = p.participants?.id;
@@ -575,7 +578,7 @@ let showOneConversation = async (conversation_id, user_id,transaction ) => {
     });
     const usersMember = await getUsersInConversation(data.id,"conversation",user_id);
     const groupeInitiate = await UserController.show(parseInt(data.user_id));
-    // console.log("user member", usersMember);
+    console.log("user member", usersMember);
     // console.log("data convesation goup avatar", data);
     // JSON.parse(data.dataValues.group_avatar);
     const enrichedConversations = {
@@ -585,7 +588,7 @@ let showOneConversation = async (conversation_id, user_id,transaction ) => {
       messages: [],
       firstUser: firstUser ? firstUser : null,
       secondUser: secondUser ? secondUser : null,
-      members: data.type === 'group' ? usersMember : [],
+      members: data.type === 'group' ? await getUsersInConversation(data.id,"conversation",user_id) : [],
       unreadMessages: unreadMessagesCount
     };
 

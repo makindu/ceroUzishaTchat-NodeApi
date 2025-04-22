@@ -10,7 +10,7 @@ const getUserSocketId =  require("../../socket").getUserSocketId;
 const getIo =  require("../../socket").getIo;
 const messageMentionController = require('../messageMention/message.mention.controller');
 const messageReferenceController =  require('../MessageReference/message.reference.controller');
-const { Op } = require("sequelize");
+const { Op, json } = require("sequelize");
 const allconstant = require("../../src/constantes");
 const ConversationsController = require("../conversations/Conversation.controller");
 const MessagesController = {};
@@ -100,7 +100,8 @@ MessagesController.createMedia = async (req, res) => {
       receiverId: element.receiverId,
       enterprise_id: element.enterprise_id,
       conversation_id: conversationExist.id,
-      forwarded:element.forwarded
+      forwarded:element.forwarded,
+      members_read_it: JSON.stringify(element.members_read_it)
     };
     if( element.message_id ){
       console.log("herer i respond to any message");
@@ -382,7 +383,9 @@ MessageSendOne =  async (element)=>{
           receiverId: element.receiverId,
           enterprise_id: element.enterprise_id,
           conversation_id: newConversation.dataValues.id,
-          forwarded:element.forwarded
+          forwarded:element.forwarded,
+          members_read_it: JSON.stringify(element.members_read_it)
+
         };
        
         
@@ -468,7 +471,9 @@ MessageSendOne =  async (element)=>{
           receiverId: element.receiverId,
           enterprise_id: element.enterprise_id,
           conversation_id: conversationExist.id,
-          forwarded:element.forwarded
+          forwarded:element.forwarded,
+          members_read_it: JSON.stringify(element.members_read_it)
+
         };
         if( element.message_id ){
           console.log("herer i respond to any message");
@@ -485,7 +490,14 @@ MessageSendOne =  async (element)=>{
               include: [
                 {
                   model: Messages,
-                  as: 'responseFrom', // L'alias défini dans belongsTo
+                  as: 'responseFrom', 
+                  include: [
+                    {
+                      model: Users,
+                      as: 'sender', 
+                      attributes: allconstant.Userattributes,
+                    }
+                  ]
                 },
                 {
                   model: Users,
@@ -498,6 +510,7 @@ MessageSendOne =  async (element)=>{
                   attributes : allconstant.Userattributes,
                 },
               ],
+              nest: true
             });
          JSON.parse(message.responseFrom.medias);
            const receiverSocketId = getUserSocketId(element.receiverId);
@@ -564,7 +577,7 @@ MessageSendOne =  async (element)=>{
                   }
                 ]
               });
-          
+          console.log("les membres dans l message est ======>---------", membres);
               for (const membre of membres) {
                 const userId = membre.participants.id;
                 if (userId !== element.user_id) {
@@ -576,14 +589,14 @@ MessageSendOne =  async (element)=>{
                   }
                 }
               }
-              const sendersocketId = getUserSocketId(userId);
-                  if (socketId) {
+              const sendersocketId = getUserSocketId(element.user_id);
+                  if (sendersocketId) {
                     getIo().to(sendersocketId).emit("new_message", {
                       message: messagewhithNentionAndReferences,
                     });
                   }
             } catch (error) {
-              console.error("Erreur lors de l’envoi des messages de groupe :", error.toString());
+              console.error("Erreur lors de l'envoi des messages de groupe :", error.toString());
             }
           } 
           else {
@@ -694,7 +707,7 @@ MessageSendOne =  async (element)=>{
                 });
             
                 for (const membre of membres) {
-                  // console.log("users groupe", membre.participants.id );
+                  console.log("users groupe", membre.participants.id );
                   const userId = membre.participants.id;
                   if (userId !== element.user_id) {
                     const socketId = getUserSocketId(membre.participants.id);
@@ -775,7 +788,14 @@ MessageSendOne =  async (element)=>{
         },
         {
           model: Messages,
-          as: 'responseFrom', // L'alias défini dans belongsTo
+          as: 'responseFrom', 
+          include:[
+            {
+              model: Users,
+              as: 'sender', 
+              attributes : allconstant.Userattributes,
+            },
+          ]
         },
         {
           model: Users,
