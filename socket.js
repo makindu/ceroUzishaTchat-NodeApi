@@ -13,7 +13,7 @@ const initializeSocket = (server) => {
     });
 
     io.on("connection", (socket) => {
-        // console.log("🔗 Un utilisateur connecté:", socket.id);
+        console.log("🔗 Un utilisateur connecté:", socket.id);
 
         // Associer un socket à un user_id
         socket.on("joinRoom", (user_id) => {
