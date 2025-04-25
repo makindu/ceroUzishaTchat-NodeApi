@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { use } = require("../index.route");
+const { Op } = require("sequelize");
 const Users = require("../db.provider").Users;
 const Token = require("../db.provider").Token;
 const getIo = require("../socket").getIo;
@@ -37,7 +38,7 @@ const getUserSocketId = require("../socket").getUserSocketId;
 const authenticateToken = async (req, res, next) => {
   const token = req.headers["authorization"]?.split(" ")[1];
   console.log("Authorization header:", req.headers["authorization"]);
-  if (!token) return res.status(401).json({ message:"Error", error: "Token requis", data: null });
+  if (!token) return res.status(401).json({ message:"Error", error: "token requied", data: null });
   
   const tokenEntry = await Token.findOne({ where: { token:token } });
   if (!tokenEntry) return res.status(403).json({ message: "Error",error: "Invalid or expired user token", data: null });
@@ -55,9 +56,15 @@ const authenticateToken = async (req, res, next) => {
 };
 const login = async (req, res) => {
   const { user_name, user_password } = req.body;
-
-  const user = await Users.findOne({ where: { user_password } });
-  if (!user) return res.status(404).json({ message: "Utilisateur introuvable" });
+condition =
+{
+  [Op.or]: [
+    { user_name: req.body.user_name },
+    { user_password: req.body.user_password },
+  ],
+};
+  const user = await Users.findOne({ where: condition });
+  if (!user) return res.status(404).json({ message: "User not found" });
 
   let valid = false
   if (user_password !== user.user_password) 
@@ -74,7 +81,7 @@ const login = async (req, res) => {
     valid = true
     };
   if (!valid) {
-      res.status(401).json({ message: "Error", error:"Mot de passe ou nom d'utilisateur incorect", data: null });
+      res.status(401).json({ message: "Error", error:"username or password is incorect", data: null });
     return ;
 }
   const token = jwt.sign({ id: user.id, user_name }, process.env.JWT_SECRET, {
@@ -129,6 +136,7 @@ const logout = async (req, res) => {
   }
 };
 
+
 const validateToken = async (req, res) => {
   const token = req.headers["authorization"]?.split(" ")[1];
   if (!token) return res.status(400).json({ message: "Token manquant" });
@@ -138,6 +146,13 @@ const validateToken = async (req, res) => {
 
   res.json({ valid: true, token: tokenEntry });
 };
+const validateTokenFunction = async (data) => {
+  const token = data.token;
+  if (!token) return json({ message: "Token manquant" });
 
+  const tokenEntry = await Token.findOne({ where: { token } });
+  if (!tokenEntry) return json({ valid: false, message: "Token invalid or expired",token: null });
+ return json({ valid: true, token: tokenEntry,message: "Token invalid or expired" });
+};
 
 module.exports = {authenticateToken,login,logout,validateToken};

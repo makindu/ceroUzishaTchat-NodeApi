@@ -1,16 +1,19 @@
 const Conversations = require("../../db.provider").Conversations;
+exports.Conversations = Conversations;
 const Libraries = require('../../db.provider').Libraries;
 const Users = require('../../db.provider').Users;
+exports.Users = Users;
 const Messages = require('../../db.provider').messages;
+exports.Messages = Messages;
 const allconstant = require("../constantes");
 const UserController = require('../users/user.controller');
 const Participer = require('../../db.provider').Participer;
 const { Op, json, where } = require("sequelize");
 const getIo = require("../../socket").getIo;
-const getUserSocketId = require("../../socket").getUserSocketId;
+const getUserSocketId = require('../../socket').getUserSocketId;
 const connection = require('../../db.provider').connection;
 
-// const ConversationsController = {};
+const ConversationsController = {};
 
 const generatePaginationUrls = (baseUrl, page, pageSize, totalPages) => {
   const nextUrl = page < totalPages ? `${baseUrl}?page=${page + 1}&pageSize=${pageSize}` : null;
@@ -21,7 +24,7 @@ const generatePaginationUrls = (baseUrl, page, pageSize, totalPages) => {
   return { nextUrl, prevUrl, firstUrl, lastUrl };
 };
 
-const  messages = async (req, res) => {
+ConversationsController.messages = async (req, res) => {
   try {
     const conversationId = parseInt(req.params.conversationId);
     if (isNaN(conversationId)) {
@@ -58,13 +61,13 @@ const  messages = async (req, res) => {
     const { nextUrl, prevUrl, firstUrl, lastUrl } = generatePaginationUrls(baseUrl, page, pageSize, totalPages);
 
     // Réponse avec les messages et les informations de navigation
-    let medias = await Promise.all(messages.map((message) => {
+    let medias = await Promise.all(messages.map(async (message) => {
       const media = JSON.parse(message.medias);
       message.medias = media;
       if (message.responseFrom) {
         message.responseFrom.medias = JSON.parse(message.responseFrom.medias);
       }
-      const result = findByPkMesssagesIncludeMentionsAndRefs(message.id);
+      const result = await findByPkMesssagesIncludeMentionsAndRefs(message.id);
 
       return result;
     }));
@@ -98,7 +101,7 @@ const  messages = async (req, res) => {
   }
 }
 
-const  create = async (FirstUser, SecondUser, EnterpriseId) => {
+ConversationsController.create = async (FirstUser, SecondUser, EnterpriseId) => {
   if (!FirstUser && !SecondUser) {
     // res.status(400).send(" les utilisateur concérnés sont requis");
     return;
@@ -141,7 +144,7 @@ const  create = async (FirstUser, SecondUser, EnterpriseId) => {
     // return {error}
   }
 };
-const  getData = async (req, res) => {
+ConversationsController.getData = async (req, res) => {
   console.log("getting all data");
 
   let condition = {};
@@ -296,11 +299,11 @@ const  getData = async (req, res) => {
           enterprise_id: group.enterprise_id,
           group_name: group.group_name || null,
           description: group.description || null,
-          created_by: createdBy,
           user_id: group.user_id,
           first_user: null,
           second_user: null,
         },
+        created_by: createdBy,
         mediasData: [],
         docsData: [],
         lastMessage: resultLastMessage,
@@ -326,8 +329,7 @@ const  getData = async (req, res) => {
     res.status(500).send({ status: 500, message: "Error occurred", error: error.toString(), data: [] });
   }
 };
-
-const  showOne = async (conversation_id, user_id) => {
+ConversationsController.showOne = async (conversation_id, user_id) => {
   console.log("getting all data");
 
 
@@ -418,9 +420,12 @@ const getUsersInConversation = async (id, criterial, user_id) => {
       ? { id_conversation: id }
       : { id_user: user_id, id_conversation: id };
 
-    const participants = await Participer.findAll({
-      attributes: ['role', 'status'],
-      where: whereClause,
+      // const rawParticipants = await Participer.findAll({
+      //   where: { id_conversation: id }
+      // });
+      let participants = await Participer.findAll({
+        attributes: ['role', 'status'],
+        where: whereClause,
       include: [
         {
           model: Users,
@@ -428,10 +433,12 @@ const getUsersInConversation = async (id, criterial, user_id) => {
           attributes: allconstant.Userattributes,
           required: true
         }
-      ]
+      ],
+      raw: true,
+      nest: true,
     });
-
-    // Nettoyage des doublons avec Map
+    // console.log("Raw participants only from Participer table ===>", rawParticipants);
+    console.log("les participant sont ======================>", participants );
     const uniqueMembersMap = new Map();
     participants.forEach(p => {
       const userId = p.participants?.id;
@@ -451,11 +458,19 @@ const getUsersInConversation = async (id, criterial, user_id) => {
     return [];
   }
 };
-
-const getUserGoupConversation = async (userId) => {
+let getUserGoupConversation = async (userId,conversationId) => {
   try {
+    // console.log("param in data group ==============>",userId);
+    let  condition ={
+      [Op.and]:[
+        { id_user: userId},
+        {id_conversation:conversationId}
+      ],
+      status: { [Op.ne]: 'desabled' },
+      
+    }
     const participantRecords = await Participer.findAll({
-      where: { id_user: userId },
+      where: condition,
       attributes: ['id_conversation']
     });
 
@@ -503,7 +518,7 @@ const getUserGoupConversation = async (userId) => {
     return [];
   }
 };
-showOneConversation = async (conversation_id, user_id,transaction ) => {
+let showOneConversation = async (conversation_id, user_id,transaction ) => {
   // console.warn("convesation user and convesation id ===>",conversation_id,user_id);
   try {
     let data = await Conversations.findByPk(
@@ -517,7 +532,7 @@ showOneConversation = async (conversation_id, user_id,transaction ) => {
       return 
       // res.status(200).send({ message: "No conversations found 3", error: null, data: [] });
     }else{
-      // console.log("message conversations found 3 ==================> ", data);
+      console.log("message conversations found 3 ==================> ", data);
 
     }
     let firstUser = null;
@@ -577,7 +592,7 @@ showOneConversation = async (conversation_id, user_id,transaction ) => {
     });
     const usersMember = await getUsersInConversation(data.id,"conversation",user_id);
     const groupeInitiate = await UserController.show(parseInt(data.user_id));
-    // console.log("user member", usersMember);
+    console.log("user member", usersMember);
     // console.log("data convesation goup avatar", data);
     // JSON.parse(data.dataValues.group_avatar);
     const enrichedConversations = {
@@ -587,7 +602,7 @@ showOneConversation = async (conversation_id, user_id,transaction ) => {
       messages: [],
       firstUser: firstUser ? firstUser : null,
       secondUser: secondUser ? secondUser : null,
-      members: data.type === 'group' ? usersMember : [],
+      members: data.type === 'group' ? await getUsersInConversation(data.id,"conversation",user_id) : [],
       unreadMessages: unreadMessagesCount
     };
 
@@ -597,7 +612,7 @@ showOneConversation = async (conversation_id, user_id,transaction ) => {
     return json({ message: "error", error: error.toString(), data: null });
   }
 };
-const  deletePermanently = async (req, res) => {
+ConversationsController.deletePermanently = async (req, res) => {
   const { conversation_id } = req.params;
 
   try {
@@ -623,7 +638,7 @@ const  deletePermanently = async (req, res) => {
     });
   }
 };
-const  getSingleConversations = async (req, res) => {
+ConversationsController.getSingleConversations = async (req, res) => {
   // let condition = {};
   // if (req.params.id) {
   //   condition = {
@@ -645,7 +660,8 @@ const  getSingleConversations = async (req, res) => {
       .send({ message: "Error occured", error: error.toString(), data: [] });
   }
 };
-const  updateConversations = async (req, res) => {
+ConversationsController.updateConversations = async (req, res) => {
+
   if (!req.params.id) {
     res
       .status(400)
@@ -663,7 +679,7 @@ const  updateConversations = async (req, res) => {
       if (conversationdata.conversation.type === "group") {
         const usersInside = await Participer.findAll({ where: { id_conversation: conversationdata.conversation.id } });
         const isAdmn = await Participer.findOne({ where: { id_user: req.body.user_id } });
-        // console.log("groupe is admin for updating ------------------>",isAdmn);
+        console.log("groupe is admin for updating ------------------>",isAdmn);
         if (isAdmn.role === "admin") {
           let result = await Conversations.update(req.body, { where: { id: req.params.id } });
           if (result) {
@@ -671,17 +687,20 @@ const  updateConversations = async (req, res) => {
             // console.log("avatar data ========================> after",conversation.conversation.group_avatar);
             conversation.conversation.group_avatar = JSON.parse(conversation.conversation.group_avatar );
             if (usersInside) {
-              usersInside.map((user) => {
-                const usersSocket = getUserSocketId(user.id_user);
-                if (usersSocket) {
-                  getIo().to(usersSocket).emit("updating_conversation", {
-                    data: conversation,
-                    error: null,
-                    message: "Success",
-                    dataUpdated: Object.keys(req.body)
-                  });
-                }
-              });
+           await Promise.all(
+             usersInside.map( async (user) => {
+                 const usersSocket = await getUserSocketId(user.id_user);
+                 console.log("socket when updating==============>", usersSocket);
+                 if (usersSocket) {
+                   getIo().to(usersSocket).emit("updating_conversation", {
+                     data: conversation,
+                     error: null,
+                     message: "Success",
+                     dataUpdated: Object.keys(req.body)
+                   });
+                 }
+               })
+            )  
             }
             res.status(200).send({ message: "Success", error: null, data: conversation });
             return;
@@ -743,10 +762,10 @@ const  updateConversations = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .send({ message: "Error", error: error.toString(), data: null });
+      .send({ message: "Error "+ typeof getUserSocketId , error: error.toString(), data: null });
   }
 };
-const  getConversationMedias = async (req, res) => {
+ConversationsController.getConversationMedias = async (req, res) => {
   if (!req.body.conversation) {
     res
       .status(400)
@@ -812,32 +831,7 @@ const  getConversationMedias = async (req, res) => {
   }
 
 }
-let GroupExist = async (conversationId) => {
-  try {
-    const conversation = await Conversations.findByPk(conversationId);
-    if (conversation) {
-      return {
-        data: conversation,
-        status: true,
-        error: null
-      }
-    }
-    else {
-      return {
-        data: null,
-        status: false,
-        error: "error while getting convrsation"
-      }
-    }
-  } catch (error) {
-    return {
-      data: null,
-      status: false,
-      error: error.toString()
-    }
-  }
-};
-const  ConversationOnExist = async (conversationId) => {
+GroupExist = async (conversationId) => {
   try {
     const conversation = Conversations.findByPk(conversationId);
     if (conversation) {
@@ -862,7 +856,32 @@ const  ConversationOnExist = async (conversationId) => {
     }
   }
 };
-const  conversationExist = async (element) => {
+ConversationsController.ConversationOnExist = async (conversationId) => {
+  try {
+    const conversation = Conversations.findByPk(conversationId);
+    if (conversation) {
+      return {
+        data: conversation,
+        status: true,
+        error: null
+      }
+    }
+    else {
+      return {
+        data: null,
+        status: false,
+        error: "error while getting convrsation"
+      }
+    }
+  } catch (error) {
+    return {
+      data: null,
+      status: false,
+      error: error.toString()
+    }
+  }
+};
+ConversationsController.conversationExist = async (element) => {
   try {
     const condition = {
       [Op.or]: [
@@ -941,7 +960,118 @@ const  conversationExist = async (element) => {
     };
   }
 };
-const createGroup = async (req, res) => {
+// ConversationsController.createGroup = async (req, res) => {
+//   const { members, user_id, type, group_avatar, ...conversationData } = req.body;
+
+//   if (!members || !Array.isArray(members) || members.length === 0 || !user_id || !type) {
+//     return res.status(400).send({
+//       message: "Error",
+//       error: "Missing required fields",
+//       data: null,
+//     });
+//   }
+
+//   const transaction = await connection.transaction();
+//   const UsersIs = [];
+//   let dataInResponse = [];
+
+//   try {
+//     const conversation = await Conversations.create(req.body, { transaction });
+
+//     if (!conversation) {
+//       await transaction.rollback();
+//       return res.status(500).send({
+//         message: "Error",
+//         error: "Failed to create conversation",
+//         data: null,
+//       });
+//     }
+
+//     for (let index = 0; index < members.length; index++) {
+//       const user = members[index];
+//       const userfound = await UserController.userExists({ id: user.id });
+
+//       if (!userfound) {
+//         await transaction.rollback();
+//         return res.status(404).send({
+//           message: "Error",
+//           error: `User with ID ${user.id} not found`,
+//           data: null,
+//         });
+//       }
+
+//       UsersIs.push(user.id);
+
+//       const groupData = {
+//         id_user: user.id,
+//         id_conversation: conversation.id,
+//         role: user.id === user_id ? "admin" : "writter",
+//         status: user.status
+//       };
+
+//       await Participer.findOrCreate({
+//         where: {
+//           id_user: user.id,
+//           id_conversation: conversation.id
+//         },
+//         defaults: groupData,
+//         transaction
+//       });
+//     }
+//     const conversationFormat1 = await showOneConversation(conversation.id, user_id, transaction);
+//     if (conversationFormat1) {
+//       conversationFormat1.conversation.group_avatar = JSON.parse(conversationFormat1.conversation.group_avatar);
+//       // dataInResponse.push(conversationFormat1);
+//       dataInResponse.push({
+//         conversation,
+//         created_by: await UserController.show(user_id),
+//         members:  [],
+//         lastMessage: null,
+//         unreadMessages: 0,
+//       });
+//     }
+
+//     // OU ✅ OPTION 2 : Commit d'abord, puis appeler sans transaction
+//     // await transaction.commit();
+//     // const conversationFormat2 = await showOneConversation(conversation.id, user_id);
+//     // if (conversationFormat2) {
+//     //   dataInResponse.push(conversationFormat2);
+//     // }
+
+//     // OU ✅ OPTION 3 : Construction manuelle simplifiée (exemple de fallback minimal)
+
+//     await Promise.all(UsersIs.map( async (id) => {
+//       const socketId = getUserSocketId(id);
+//       if (socketId) {
+//         // console.log("user to alert whith socket ===============> i"+id, socketId);
+//         getIo().to(socketId).emit("new_conversation", {
+//           conversation: dataInResponse[0],
+//         });
+//       }else{
+
+//         // console.log("user to alert whith socket ===============> i"+id, socketId);
+//       }
+//     }));
+
+    
+//     res.status(200).send({
+//       message: "Success",
+//       error: null,
+//       data: dataInResponse[0],
+//     });
+//     await transaction.commit(); 
+
+//   } catch (error) {
+//     await transaction.rollback();
+//     console.error("Erreur lors de la création du groupe :", error);
+//     return res.status(500).send({
+//       message: "Error",
+//       error: error.message || "Internal Server Error",
+//       data: null,
+//     });
+//   }
+// };
+ConversationsController.createGroup = async (req, res) => {
   const { members, user_id, type, group_avatar, ...conversationData } = req.body;
 
   if (!members || !Array.isArray(members) || members.length === 0 || !user_id || !type) {
@@ -987,7 +1117,7 @@ const createGroup = async (req, res) => {
         id_user: user.id,
         id_conversation: conversation.id,
         role: user.id === user_id ? "admin" : "writter",
-        status: user.status
+        status: user.status || "activated",
       };
 
       await Participer.findOrCreate({
@@ -999,54 +1129,63 @@ const createGroup = async (req, res) => {
         transaction
       });
     }
-    const conversationFormat1 = await showOneConversation(conversation.id, user_id, transaction);
 
-    if (conversationFormat1) {
-      try {
-        conversationFormat1.conversation.group_avatar = JSON.parse(conversationFormat1.conversation.group_avatar);
-      } catch (e) {
-        console.warn("Erreur lors du parse du group_avatar :", e.message);
-      }
-      dataInResponse.push(conversationFormat1);
+    const membersWithUsers = await Participer.findAll({
+      where: { id_conversation: conversation.id },
+      include: [
+        {
+          model: Users,
+          as: 'participants',
+          attributes: allconstant.Userattributes
+        }
+      ],
+      transaction,
+    });
+
+    const formattedMembers = membersWithUsers.map(member => {
+      const user = member.participants;
+      return {
+        id: user.id,
+        user_name: user.user_name,
+        full_name: user.full_name,
+        user_mail: user.user_mail,
+        user_phone: user.user_phone,
+        avatar: user.avatar,
+        status: user.status,
+        role: member.role,
+      };
+    });
+
+    if (group_avatar && typeof conversation.group_avatar === 'string') {
+      conversation.group_avatar = JSON.parse(conversation.group_avatar);
     }
 
-    // OU ✅ OPTION 2 : Commit d'abord, puis appeler sans transaction
-    // await transaction.commit();
-    // const conversationFormat2 = await showOneConversation(conversation.id, user_id);
-    // if (conversationFormat2) {
-    //   dataInResponse.push(conversationFormat2);
-    // }
+    dataInResponse.push({
+      conversation,
+      created_by: await UserController.show(user_id),
+      members: formattedMembers,
+      lastMessage: null,
+      unreadMessages: 0,
+    });
 
-    // OU ✅ OPTION 3 : Construction manuelle simplifiée (exemple de fallback minimal)
-    // dataInResponse.push({
-    //   conversation,
-    //   created_by: await UserController.show(user_id),
-    //   members: members.map(m => ({ ...m, id_conversation: conversation.id })),
-    //   lastMessage: null,
-    //   unreadMessages: 0,
-    // });
-
-  await Promise.all(UsersIs.map( async (id) => {
+    // 🔔 Notifier tous les membres en temps réel
+    await Promise.all(UsersIs.map(async (id) => {
       const socketId = getUserSocketId(id);
       if (socketId) {
-        console.log("user to alert whith socket ===============> i"+id, socketId);
         getIo().to(socketId).emit("new_conversation", {
           conversation: dataInResponse[0],
         });
-      }else{
-
-        console.log("user to alert whith socket ===============> i"+id, socketId);
       }
     }));
 
-    
-    res.status(200).send({
+    await transaction.commit();
+
+    return res.status(200).send({
       message: "Success",
       error: null,
       data: dataInResponse[0],
     });
-    
-    await transaction.commit(); 
+
   } catch (error) {
     await transaction.rollback();
     console.error("Erreur lors de la création du groupe :", error);
@@ -1057,7 +1196,8 @@ const createGroup = async (req, res) => {
     });
   }
 };
-const  updatedParticipantGroup = async (req, res) => {
+
+ConversationsController.updatedParticipantGroup = async (req, res) => {
   if (!req.body) 
   {
     res.status(500).send({ message: "Error", error: "some data are required", data: null });
@@ -1141,7 +1281,7 @@ const  updatedParticipantGroup = async (req, res) => {
     return 
   }
 };
-const  setNewMember = async (req,res)=>{
+ConversationsController.setNewMember = async (req,res)=>{
 
   if (!req.body.members) {
     res.status(400).send({message:"Error", error: "data is required", data:null});
@@ -1219,7 +1359,8 @@ const  setNewMember = async (req,res)=>{
         });
         res.status(200).send({message:"Success",error:null, data:conversation });
         return;
-      } 
+      }
+          
     }
     else{
       res.status(200).send({message:"Error",error:"there is an error", data:null });
@@ -1230,7 +1371,7 @@ const  setNewMember = async (req,res)=>{
     return;
   }
 };
-const  whithdrawMember = async (req,res)=>{
+ConversationsController.whithdrawMember = async (req,res)=>{
   if (!req.body.members) {
     res
     .status(500)
@@ -1257,23 +1398,4 @@ const  whithdrawMember = async (req,res)=>{
 }
 
 
-module.exports = {
-  messages,
-create,
-getData,
-showOne,
-getUsersInConversation,
-getUserGoupConversation,
-showOneConversation,
-deletePermanently,
-getSingleConversations,
-updateConversations,
-getConversationMedias,
-GroupExist,
-ConversationOnExist,
-conversationExist,
-createGroup,
-updatedParticipantGroup,
-setNewMember,
-whithdrawMember
-};
+module.exports = {ConversationsController,getUserGoupConversation};

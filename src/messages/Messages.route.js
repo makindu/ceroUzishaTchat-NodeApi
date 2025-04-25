@@ -1,5 +1,5 @@
 const {MessagesController} = require("./Messages.controller");
-const authenticateToken = require("../../middlewares/authenticateToken").authenticateToken;
+const authenticateToken = require('../../middlewares/authenticateToken').authenticateToken;
 const router = require("express").Router();
 
 router.get("/all/:value?",authenticateToken, MessagesController.getData);

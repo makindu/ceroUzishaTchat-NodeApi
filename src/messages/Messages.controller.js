@@ -10,9 +10,9 @@ const getUserSocketId =  require("../../socket").getUserSocketId;
 const getIo =  require("../../socket").getIo;
 const messageMentionController = require('../messageMention/message.mention.controller');
 const messageReferenceController =  require('../MessageReference/message.reference.controller');
-const { Op } = require("sequelize");
+const { Op, json } = require("sequelize");
 const allconstant = require("../../src/constantes");
-const ConversationsController = require("../conversations/Conversation.controller");
+const ConversationsController = require("../conversations/Conversation.controller").ConversationsController;
 const MessagesController = {};
 
 MessagesController.create = async (req, res) => {
@@ -55,7 +55,7 @@ MessagesController.createMedia = async (req, res) => {
 
     for (let index = 0; index < req.body.data.length; index++) {
       const element = req.body.data[index];
-      const existing = await ConversationsController.conversationExist(element);
+      const existing = await ConversationsController.ConversationsController .conversationExist(element);
 
       if (existing.status === true) {
         const newMessage = await MessageSendOnce(element, existing.data);
@@ -100,7 +100,8 @@ MessagesController.createMedia = async (req, res) => {
       receiverId: element.receiverId,
       enterprise_id: element.enterprise_id,
       conversation_id: conversationExist.id,
-      forwarded:element.forwarded
+      forwarded:element.forwarded,
+      members_read_it: JSON.stringify(element.members_read_it)
     };
     if( element.message_id ){
       console.log("herer i respond to any message");
@@ -382,7 +383,9 @@ MessageSendOne =  async (element)=>{
           receiverId: element.receiverId,
           enterprise_id: element.enterprise_id,
           conversation_id: newConversation.dataValues.id,
-          forwarded:element.forwarded
+          forwarded:element.forwarded,
+          members_read_it: JSON.stringify(element.members_read_it)
+
         };
        
         
@@ -468,7 +471,9 @@ MessageSendOne =  async (element)=>{
           receiverId: element.receiverId,
           enterprise_id: element.enterprise_id,
           conversation_id: conversationExist.id,
-          forwarded:element.forwarded
+          forwarded:element.forwarded,
+          members_read_it: JSON.stringify(element.members_read_it)
+
         };
         if( element.message_id ){
           console.log("herer i respond to any message");
@@ -485,7 +490,14 @@ MessageSendOne =  async (element)=>{
               include: [
                 {
                   model: Messages,
-                  as: 'responseFrom', // L'alias défini dans belongsTo
+                  as: 'responseFrom', 
+                  include: [
+                    {
+                      model: Users,
+                      as: 'sender', 
+                      attributes: allconstant.Userattributes,
+                    }
+                  ]
                 },
                 {
                   model: Users,
@@ -498,6 +510,7 @@ MessageSendOne =  async (element)=>{
                   attributes : allconstant.Userattributes,
                 },
               ],
+              nest: true
             });
          JSON.parse(message.responseFrom.medias);
            const receiverSocketId = getUserSocketId(element.receiverId);
@@ -564,11 +577,12 @@ MessageSendOne =  async (element)=>{
                   }
                 ]
               });
-          
+          console.log("les membres dans l message est ======>---------", membres);
               for (const membre of membres) {
                 const userId = membre.participants.id;
                 if (userId !== element.user_id) {
                   const socketId = getUserSocketId(userId);
+                  console.log("socket id group users",socketId);
                   if (socketId) {
                     getIo().to(socketId).emit("new_message", {
                       message: messagewhithNentionAndReferences,
@@ -576,14 +590,16 @@ MessageSendOne =  async (element)=>{
                   }
                 }
               }
-              const sendersocketId = getUserSocketId(userId);
-                  if (socketId) {
+              const sendersocketId = getUserSocketId(element.user_id);
+              console.log("socket id group users sender",sendersocketId);
+
+                  if (sendersocketId) {
                     getIo().to(sendersocketId).emit("new_message", {
                       message: messagewhithNentionAndReferences,
                     });
                   }
             } catch (error) {
-              console.error("Erreur lors de l’envoi des messages de groupe :", error.toString());
+              console.error("Erreur lors de l'envoi des messages de groupe :", error.toString());
             }
           } 
           else {
@@ -694,7 +710,7 @@ MessageSendOne =  async (element)=>{
                 });
             
                 for (const membre of membres) {
-                  // console.log("users groupe", membre.participants.id );
+                  console.log("users groupe", membre.participants.id );
                   const userId = membre.participants.id;
                   if (userId !== element.user_id) {
                     const socketId = getUserSocketId(membre.participants.id);
@@ -775,7 +791,14 @@ MessageSendOne =  async (element)=>{
         },
         {
           model: Messages,
-          as: 'responseFrom', // L'alias défini dans belongsTo
+          as: 'responseFrom', 
+          include:[
+            {
+              model: Users,
+              as: 'sender', 
+              attributes : allconstant.Userattributes,
+            },
+          ]
         },
         {
           model: Users,
@@ -1051,372 +1074,69 @@ MessagesController.findByPk = async (req, res) => {
   }
 };
 MessagesController.updateMessages = async (req, res) => {
-  if (!req.params.id || !req.body.conversation_id) {
-    return res.status(400).send({
-      message: "Error",
-      error: "Paramètre manquant",
-      data: null,
-    });
+  let condition = {
+    [Op.and]:
+      {id: req.params.id},
+      status: { [Op.ne]: 'deleted' }
+  };
+  if (!req.params.id) {
+    res
+      .status(400)
+      .send({ message: "Error", error: "Aucun ID specifie", data: null });
+    return;
   }
 
   try {
-    const condition = {
-      [Op.and]: [
-        { id: req.params.id },
-        { status: { [Op.ne]: "deleted" } },
-      ],
-    };
-
-    const conversation = await ConversationsController.GroupExist(req.body.conversation_id);
-    if (!conversation.status) {
-      return res.status(400).send({
-        message: "Error",
-        error: "Conversation introuvable",
-        data: null,
-      });
-    }
-
-    const message = await Messages.findByPk(parseInt(req.params.id), {
-      attributes: allconstant.messageattributes,
-    });
-
-    if (!message) {
-      return res.status(404).send({
-        message: "Error",
-        error: "Message introuvable",
-        data: null,
-      });
-    }
-
-    // Cas des groupes
-    if (conversation.data.type === "group" && req.body.member_id) {
-      let usersRead = {};
-
-      if (message.members_read_it) {
-        try {
-          usersRead = JSON.parse(message.members_read_it);
-        } catch (err) {
-          console.warn("Erreur de parsing JSON sur members_read_it", err);
+    console.log("before updating message");
+    req.body.read_at = Date();
+    let result = await Messages.update(req.body, { where: condition });
+    if(result ){
+      let data = await getSingleMessages(req.params.id);
+      console.warn("after updating message ", result );
+      if (data) {
+        const receiverSocketId = getUserSocketId(data.dataValues.receiverId);
+        const senderSocketId = getUserSocketId(data.dataValues.senderId);
+        console.warn("socket recerverusers ", receiverSocketId );
+        console.warn("socket senderusers ", senderSocketId );
+        messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(data.dataValues.id);
+        if (messagewhithNentionAndReferences) {
+          if (receiverSocketId) {
+            getIo().to(receiverSocketId).emit("renew_message", {
+              message: messagewhithNentionAndReferences,
+            });
+          }
+          if (senderSocketId) {
+            getIo().to(senderSocketId).emit("renew_message", {
+              message: messagewhithNentionAndReferences,
+            });
+            
+          }
+          res.status(200).send({ message: "Success", error: null, data: messagewhithNentionAndReferences });
+        }else{
+          
+          res.status(200).send({ message: "error", error: 'error while getting message updated', data: null });
         }
+       
       }
-
-      const memberKey = `member_${req.body.member_id}`;
-      if (usersRead[memberKey]) {
-        return res.status(200).send({
-          message: "Already marked as read",
-          data: message,
-        });
+      else{
+        res
+        .status(500)
+        .send({ message: "Error", error: "error while geting updated message ", data: null });
       }
-
-      // Ajouter le nouveau membre
-      usersRead[memberKey] = req.body.member_id;
-      req.body.members_read_it = usersRead;
-
-      // Vérifier si tous les membres du groupe ont lu
-      const groupMembers = await Participer.findAll({
-        where: { id_conversation: req.body.conversation_id },
-        attributes: ["id_user"],
-      });
-
-      const allMemberIds = groupMembers.map((m) => m.id_user.toString());
-      const readMemberIds = Object.values(usersRead).map((id) => id.toString());
-
-      const allHaveRead = allMemberIds.every((id) => readMemberIds.includes(id));
-
-      if (allHaveRead) {
-        req.body.status = "read_by_all";
-      }
-
-      const result = await updatefunction(req.body, condition, req.params.id);
-
-      if (result.message === "Success" && allHaveRead) {
-        const senderSocket = getUserSocketId(message.senderId);
-        if (senderSocket) {
-          getIo().to(senderSocket).emit("message_fully_read", {
-            message_id: message.id,
-            status: "read_by_all",
-          });
-        }
-      }
-
-      return res.status(200).send(result);
     }
-
-    // Cas hors groupe
-    req.body.read_at = new Date();
-    const result = await updatefunction(req.body, condition, req.params.id);
-    return res.status(200).send(result);
+    else{
+      res
+        .status(500)
+        .send({ message: "Error", error: "error while  updating message ", data: null });
+     
+    }
   } catch (error) {
-    return res.status(500).send({
-      message: "Error",
-      error: error.toString(),
-      data: null,
-    });
+    res
+      .status(500)
+      .send({ message: "Error", error: error.toString(), data: null });
   }
 };
 
-// MessagesController.updateMessages = async (req, res) => {
-  
-//   if (!req.params.id) {
-//     res
-//       .status(400)
-//       .send({ message: "Error", error: "Aucun ID specifie", data: null });
-//     return;
-//   };
-//   if (!req.body.conversation_id) 
-//   {
-//     res
-//     .status(400)
-//     .send({ message: "Error", error: "some data is required", data: null });
-//   return;
-//   }
-
-//   try {
-    
-//     let condition = {
-//       [Op.and]:
-//         {id: req.params.id},
-//         status: { [Op.ne]: 'deleted' }
-//       };
-//       // console.log("before updating message");
-//       const findconversationAssocied = await ConversationsController.GroupExist(req.body.conversation_id);
-//       if (findconversationAssocied.status) {
-//         if (findconversationAssocied.data.type === "group") {
-//           console.log("here 1");
-//         let readMemberIds = [];
-//         const messagefound = await Messages.findByPk(parseInt(req.params.id), {
-//           attributes: allconstant.messageattributes
-//         });
-        
-//         if (messagefound && req.body.member_id) {
-//           let usersread = {};
-//           if (messagefound.members_read_it) {
-//             usersread = JSON.parse(messagefound.members_read_it);
-//           }
-//           console.log("here 2");
-          
-//           const key = `member_${req.body.member_id}`;
-//           if (!usersread[key]) {
-//             usersread[key] = req.body.member_id;
-//             req.body.members_read_it = JSON.stringify(usersread);
-//             const groupMembers = await Participer.findAll({
-//               where: { id_conversation: req.body.conversation_id },
-//               attributes: ['id_user']
-//             });
-            
-//             const allMemberIds = groupMembers.map((m) => m.id_user.toString());
-//             console.log("here 3");
-//             readMemberIds.push(usersread[key]);
-            
-//             const allHaveRead = allMemberIds.every(id => readMemberIds.includes(id));
-            
-//             console.log("here 4",allMemberIds);
-//             console.log("here ",usersread);
-//             if (allHaveRead) {
-//               req.body.status = 'read_by_all';
-              
-//               const result = await updatefunction(req.body, condition, req.params.id);
-//               console.log("here 5");
-//               if (result.message === "Success") 
-//                 {
-//               console.log("here 6");
-//               const senderSocket = getUserSocketId(messagefound.senderId);
-//               if (senderSocket) {
-//                 console.log("here 7");
-//                 getIo().to(senderSocket).emit("message_fully_read", {
-//                   message_id: messagefound.id,
-//                   status: 'read_by_all'
-//                 });
-//                 console.log("here 8");
-//               }
-//               res.status(200).send(result);
-//               console.log("here 9");
-//               return ;
-//             }else{
-//               console.log("here 10");
-//               res.status(200).send(result);
-//               console.log("here 11");
-//               return;
-//             }  
-//             }
-//             else{
-              
-//               req.body.members_read_it = {...usersread,...req.body.members_read_it}
-//               const result = await updatefunction(req.body, condition, req.params.id);
-//               console.log("here 5");
-//               if (result.message === "Success") 
-//                 {
-//               console.log("here 6");
-//               const senderSocket = getUserSocketId(messagefound.senderId);
-//               if (senderSocket) {
-//                 console.log("here 7");
-//                 getIo().to(senderSocket).emit("message_fully_read", {
-//                   message_id: messagefound.id,
-//                   status: 'read_by_all'
-//                 });
-//                 console.log("here 8");
-//               }
-//               res.status(200).send(result);
-//               console.log("here 9");
-//               return ;
-//             }else{
-//               console.log("here 10");
-//               res.status(200).send(result);
-//               console.log("here 11");
-//               return;
-//             }  
-//             }
-//           } else {
-//             console.log("Déjà marqué comme lu par ce membre.");
-//             return res.status(200).send({ message: "Already marked as read", data: null });
-//           }
-//         }
-//       }
-      
-//       // if (findconversationAssocied.data.type === "group") 
-//       //   {
-//       //     let membresReadIt = [];
-//       //     const messagefound = await Messages.findByPk(parseInt(req.params.id),{attributes:allconstant.messageattributes});
-//       //     console.log("type",messagefound);
-//       //   if (messagefound) {
-//       //     if (req.body.member_id)
-//       //       {
-//       //         let memberData = {};
-//       //         let usersread = {};
-//       //         if (messagefound.members_read_it) 
-//       //         {
-//       //           usersread  = JSON.parse(messagefound.members_read_it);
-//       //         }
-//       //         membresReadIt.push(usersread);
-//       //         if (membresReadIt.length === 0) 
-//       //         {
-//       //            membresReadIt.push(req.body.member_id);
-//       //         }
-//       //         else
-//       //         {
-//       //           if (membresReadIt.includes(req.body.member_id)) 
-//       //             {
-//       //               console.log("member are always read this message");
-//       //             }
-//       //             else
-//       //             {
-//       //               const key = `member_${req.body.member_id}`;
-//       //               membresReadIt.push({ [key]: req.body.member_id });
-//       //               req.body.members_read_it =  {...membresReadIt[1] , ...usersread };
-//       //                   console.log("les utilisateur ayant lue" , usersread, "ou",  req.body.members_read_it , 'et', membresReadIt );
-                  
-//       //                 }
-                  
-//       //         }
-//       //       }
-//       //   }
-//       // }
-//       else
-//       {
-//         req.body.read_at = Date();
-//         let result = await updatefunction(req.body,condition,req.params.id);
-//         if (result.message === "Success") 
-//         {
-//           res.status(200).send(result);
-//           return;  
-//         }
-//         else{
-//           res.status(200).send(result);
-//           return; 
-//         }
-//         // if(result ){
-//         //   let data = await getSingleMessages(req.params.id);
-//         //   console.warn("after updating message ", result );
-//         //   if (data) {
-//         //     const receiverSocketId = getUserSocketId(data.dataValues.receiverId);
-//         //     const senderSocketId = getUserSocketId(data.dataValues.senderId);
-//         //     console.warn("socket recerverusers ", receiverSocketId );
-//         //     console.warn("socket senderusers ", senderSocketId );
-//         //     messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(data.dataValues.id);
-//         //     if (messagewhithNentionAndReferences) {
-//         //       if (receiverSocketId) {
-//         //         getIo().to(receiverSocketId).emit("renew_message", {
-//         //           message: messagewhithNentionAndReferences,
-//         //         });
-//         //       }
-//         //       if (senderSocketId) {
-//         //         getIo().to(senderSocketId).emit("renew_message", {
-//         //           message: messagewhithNentionAndReferences,
-//         //         });
-                
-//         //       }
-//         //       res.status(200).send({ message: "Success", error: null, data: messagewhithNentionAndReferences });
-//         //     }else{
-              
-//         //       res.status(200).send({ message: "error", error: 'error while getting message updated', data: null });
-//         //     }
-           
-//         //   }
-//         //   else{
-//         //     res
-//         //     .status(500)
-//         //     .send({ message: "Error", error: "error while geting updated message ", data: null });
-//         //   }
-//         // }
-//         // else{
-//         //   res
-//         //     .status(500)
-//         //     .send({ message: "Error", error: "error while  updating message ", data: null });
-         
-//         // }
-//       }
-//     }else{
-//       res
-//       .status(400)
-//       .send({ message: "Error", error: "no conversation found for this message", data: null });
-//     return;
-//     }
-   
-//   } catch (error) {
-//     res
-//       .status(500)
-//       .send({ message: "Error", error: error.toString(), data: null });
-//   }
-// };
-const updatefunction = async (data,condition,params)=>{
-  let result = await Messages.update(data, { where: condition });
-  if(result ){
-    let data = await getSingleMessages(params);
-    // console.warn("after updating message ", result );
-    if (data) {
-      const receiverSocketId = getUserSocketId(data.dataValues.receiverId);
-      const senderSocketId = getUserSocketId(data.dataValues.senderId);
-      console.warn("socket recerverusers ", receiverSocketId );
-      console.warn("socket senderusers ", senderSocketId );
-      messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(data.dataValues.id);
-      if (messagewhithNentionAndReferences) {
-        if (receiverSocketId) {
-          getIo().to(receiverSocketId).emit("renew_message", {
-            message: messagewhithNentionAndReferences,
-          });
-        }
-        if (senderSocketId) {
-          getIo().to(senderSocketId).emit("renew_message", {
-            message: messagewhithNentionAndReferences,
-          });
-          
-        }
-        return { message: "Success", error: null, data: messagewhithNentionAndReferences };
-      }else{
-        
-        return { message: "Error", error: 'error while getting message updated', data: null };
-      }
-     
-    }
-    else{
-      return { message: "Error", error: "error while geting updated message ", data: null };
-    }
-  }
-  else{
-    return{ message: "Error", error: "error while  updating message ", data: null };
-   
-  }
-}
  extractMentionsAndReferences =  async (message, usersList) => {
   console.log("in mentions and references");
   let mentions = [];

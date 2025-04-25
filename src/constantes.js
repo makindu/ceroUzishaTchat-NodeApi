@@ -14,10 +14,7 @@ allconstant.messageattributes = [
 'enterprise_id',
 'conversation_id',
 'status',
-'members_read_it',
-'ResponseId',
-'updatedAt',
-'createdAt'
+'ResponseId'
 ];
 allconstant.mentionsattribute =  [
   
