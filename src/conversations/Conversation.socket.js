@@ -22,8 +22,8 @@ socket.on("get_all_conversations", async (element)=>{
   }
   const condition = {
     [Op.or]: [
-      { first_user: userId },
-      { second_user: userId },
+      { first_user: userId , second_user: userId},
+      // { second_user: userId },
     ],
     status: { [Op.ne]: 'deleted' },
   };
