@@ -159,7 +159,7 @@ ConversationsController.getData = async (req, res) => {
   // }
 
   try {
-    const groups = await getUserGoupConversation(req.body.user_id);
+    const groups = await getUserGoupConversation(req.body.user_id,req.body.conversation_id);
     const data = await Conversations.findAll({
       where: condition,
       order: [['createdAt', 'ASC']],
@@ -464,7 +464,7 @@ let getUserGoupConversation = async (userId,conversationId) => {
     let  condition ={
       [Op.and]:[
         { id_user: userId},
-        {id_conversation:conversationId}
+        conversationId == null ? null : {id_conversation:conversationId}
       ],
       status: { [Op.ne]: 'desabled' },
       
