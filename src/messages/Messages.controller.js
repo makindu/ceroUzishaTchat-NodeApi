@@ -631,7 +631,8 @@ MessageSendOne =  async (element)=>{
            }
 
          }else{
-          const newmessage =  await Messages.create(messageData,{
+          try {
+                const newmessage =  await Messages.create(messageData,{
             returning :  allconstant.messageattributes, 
           } );
         if (newmessage) {
@@ -756,6 +757,11 @@ MessageSendOne =  async (element)=>{
         else{
           return;
         }
+          } catch (error) {
+            console.error("Erreur lors de la création du message :", error);
+            return error;
+          }
+      
       }
 
       } else {
