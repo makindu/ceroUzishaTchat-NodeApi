@@ -12,7 +12,7 @@ const messageMentionController = require('../messageMention/message.mention.cont
 const messageReferenceController =  require('../MessageReference/message.reference.controller');
 const { Op, json } = require("sequelize");
 const allconstant = require("../../src/constantes");
-const ConversationsController = require("../conversations/Conversation.controller").ConversationsController;
+const {ConversationsController} = require("../conversations/Conversation.controller").ConversationsController;
 const MessagesController = {};
 
 MessagesController.create = async (req, res) => {
