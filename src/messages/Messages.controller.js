@@ -4,7 +4,6 @@ const Conversations= require("../../db.provider").Conversations;
 const messageReference = require("../../db.provider").messageReference;
 const messageMention  = require("../../db.provider").messageMention;
 const Participer =  require("../../db.provider").Participer;
-const {ConversationsControler} =  require('../conversations/Conversation.controller');
 const UserControl = require('../users/user.controller');
 const getUserSocketId =  require("../../socket").getUserSocketId;
 const getIo =  require("../../socket").getIo;
@@ -12,7 +11,7 @@ const messageMentionController = require('../messageMention/message.mention.cont
 const messageReferenceController =  require('../MessageReference/message.reference.controller');
 const { Op, json } = require("sequelize");
 const allconstant = require("../../src/constantes");
-const {ConversationsController} = require("../conversations/Conversation.controller").ConversationsController;
+const ConversationsController = require("../conversations/Conversation.controller").ConversationsController;
 const MessagesController = {};
 
 MessagesController.create = async (req, res) => {
@@ -425,7 +424,7 @@ MessageSendOne =  async (element)=>{
            try {
              console.log("before emiting new conversation to sender",senderSocketId);
              const socketConvesation =  getIo().to(senderSocketId).emit("new_conversation", {
-               conversation:await ConversationsControler.showOne(newConversation.dataValues.id,element.user_id)
+               conversation: await ConversationsControler.showOne(newConversation.dataValues.id,element.user_id)
              });
              console.log("after emiting new conversation to sender",socketConvesation);
            } catch (error) {
