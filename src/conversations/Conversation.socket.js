@@ -15,9 +15,19 @@ const ConversationsSocket = (socket) => {
     });
   });
 socket.on("get_all_conversations", async (element)=>{
+  console.log("get_all_conversations event triggered:", element);
+  // try {
+    
+  // } catch (error) {
+  //   console.error("Error in get_all_conversations:", error);
+  //   socket.emit("get_all_conversations", { status: 500, message: "Error occurred", error: error.toString(), data: [] });
+    
+  // }
   const userId = element.user_id;
   if (!userId) {
     console.error("❌ user_id manquant dans la requête");
+     socket.emit("get_all_conversations", { status: 400, message: "user_id is required", error:"user not found",  data: [] });
+   
     return;
   }
   const condition = {

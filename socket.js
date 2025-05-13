@@ -2,7 +2,7 @@ const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const Token = require("./db.provider").Token ;
 const ConversationsSocket = require("./src/conversations/Conversation.socket");
-
+// const MessagesSocket = require("./src/messages/messages.socket");
 let io;
 
 const users = {}; // user_id => socket.id
@@ -76,6 +76,7 @@ io.use(async (socket, next) => {
   
     socket.reconnectAttempts = 0;
     ConversationsSocket(socket);
+    // MessagesSocket(socket);
     socket.on("reconnect", () => {
       socket.reconnectAttempts += 1;
   

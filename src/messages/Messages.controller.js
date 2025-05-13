@@ -27,6 +27,12 @@ MessagesController.create = async (req, res) => {
 
   
 try{
+  const io = getIo();
+  // if (!io) {
+  //   console.error("Socket.io instance is not initialized");
+  // }else{
+  //   console.log("Socket.io instance is initialized"); 
+  // }
    
  let result = await MessageSendOne(req.body);
 return res.status(200).send({
@@ -394,8 +400,10 @@ MessageSendOne =  async (element)=>{
            returning :  allconstant.messageattributes,  
           } );
           console.log("after ");
-        const receiverSocketId = getUserSocketId(element.receiverId);
-        const senderSocketId = getUserSocketId(element.user_id);
+        const receiverSocketId = await getUserSocketId(element.receiverId);
+        const senderSocketId = await getUserSocketId(element.user_id);
+        console.log("Receiver Socket ID 1:", receiverSocketId);
+console.log("Sender Socket ID 1:", senderSocketId);
        if(newmessage){
         // let message_id =  newmessage.data.id;
         if (element.mentions) {
@@ -512,8 +520,10 @@ MessageSendOne =  async (element)=>{
               nest: true
             });
          JSON.parse(message.responseFrom.medias);
-           const receiverSocketId = getUserSocketId(element.receiverId);
-           const senderSocketId = getUserSocketId(element.user_id);
+           const receiverSocketId =  await getUserSocketId(element.receiverId);
+           const senderSocketId = await getUserSocketId(element.user_id);
+           console.log("Receiver Socket ID 2:", receiverSocketId);
+console.log("Sender Socket ID 2:", senderSocketId);
            if (element.mentions) {
             await Promise.all(
               element.mentions.map(async (mention) => {
@@ -538,32 +548,32 @@ MessageSendOne =  async (element)=>{
           };
           messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(message.id);
           JSON.parse(messagewhithNentionAndReferences.medias);
-          // if (receiverSocketId) {
+          if (receiverSocketId) {
             
-          //   try {
-          //     console.log("before emiting",receiverSocketId);
+            try {
+              console.log("before emiting",receiverSocketId);
               
-          //   const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
-          //       message: messagewhithNentionAndReferences,
-          //     });
-          //     console.log("after emiting",socketMessage);
-          //   } catch (error) {
-          //     console.log("error emiting new message",error.toString());
-          //   }
-          // }
+            const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+                message: messagewhithNentionAndReferences,
+              });
+              console.log("after emiting",socketMessage);
+            } catch (error) {
+              console.log("error emiting new message",error.toString());
+            }
+          }
 
-          // if (senderSocketId) {
-          //   try {
-          //     console.log("before emiting",senderSocketId);
+          if (senderSocketId) {
+            try {
+              console.log("before emiting",senderSocketId);
               
-          //   const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
-          //       message: messagewhithNentionAndReferences,
-          //     });
-          //     console.log("after emiting",socketMessage);
-          //   } catch (error) {
-          //     console.log("error emiting new message",error.toString());
-          //   }
-          // }
+            const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+                message: messagewhithNentionAndReferences,
+              });
+              console.log("after emiting",socketMessage);
+            } catch (error) {
+              console.log("error emiting new message",error.toString());
+            }
+          }
           if (conversationExist.type === "group") {
             try {
               const membres = await Participer.findAll({
@@ -580,7 +590,7 @@ MessageSendOne =  async (element)=>{
               for (const membre of membres) {
                 const userId = membre.participants.id;
                 if (userId !== element.user_id) {
-                  const socketId = getUserSocketId(userId);
+                  const socketId = await getUserSocketId(userId);
                   console.log("socket id group users",socketId);
                   if (socketId) {
                     getIo().to(socketId).emit("new_message", {
@@ -589,7 +599,7 @@ MessageSendOne =  async (element)=>{
                   }
                 }
               }
-              const sendersocketId = getUserSocketId(element.user_id);
+              const sendersocketId = await getUserSocketId(element.user_id);
               console.log("socket id group users sender",sendersocketId);
 
                   if (sendersocketId) {
@@ -658,10 +668,10 @@ MessageSendOne =  async (element)=>{
             console.log("befor  refeentement");
           }
          
-         const receiverSocketId = getUserSocketId(element.receiverId);
-         const senderSocketId = getUserSocketId(element.user_id);
+         const receiverSocketId = await getUserSocketId(element.receiverId);
+         const senderSocketId = await getUserSocketId(element.user_id);
          // console.log("before emiting",receiverSocketId);
-            
+            console.log("Receiver Socket ID 3:", receiverSocketId);
 
         //  res.status(200).send({ status: 200, message: "Success", error: null, data: newmessage });
         // return;
@@ -670,31 +680,31 @@ MessageSendOne =  async (element)=>{
             messagewhithNentionAndReferences =  await findByPkMesssagesIncludeMentionsAndRefs(newmessage.id);
       JSON.parse(messagewhithNentionAndReferences.medias);
             
-            // if (receiverSocketId) {
-            //   try {
-            //     console.log("before emiting",receiverSocketId);
+            if (receiverSocketId) {
+              try {
+                console.log("before emiting",receiverSocketId);
                 
-            //   const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
-            //       message: messagewhithNentionAndReferences,
-            //     });
-            //     console.log("after emiting",socketMessage);
-            //   } catch (error) {
-            //     console.log("error emiting new message",error.toString());
-            //   }
-            // }
+              const socketMessage =  getIo().to(receiverSocketId).emit("new_message", {
+                  message: messagewhithNentionAndReferences,
+                });
+                console.log("after emiting",socketMessage);
+              } catch (error) {
+                console.log("error emiting new message",error.toString());
+              }
+            }
 
-            // if (senderSocketId) {
-            //   try {
-            //     console.log("before emiting",senderSocketId);
+            if (senderSocketId) {
+              try {
+                console.log("before emiting",senderSocketId);
                 
-            //   const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
-            //       message: messagewhithNentionAndReferences,
-            //     });
-            //     console.log("after emiting",socketMessage);
-            //   } catch (error) {
-            //     console.log("error emiting new message",error.toString());
-            //   }
-            // }
+              const socketMessage =  getIo().to(senderSocketId).emit("new_message", {
+                  message: messagewhithNentionAndReferences,
+                });
+                console.log("after emiting",socketMessage);
+              } catch (error) {
+                console.log("error emiting new message",error.toString());
+              }
+            }
             
             if (conversationExist.type === "group") {
               try {
@@ -721,7 +731,9 @@ MessageSendOne =  async (element)=>{
                     }
                   }
                 }
-                const sendersocketId = getUserSocketId(element.user_id);
+                const sendersocketId = await getUserSocketId(element.user_id);
+                // console.log("Receiver Socket ID:", receiverSocketId);
+console.log("Sender Socket ID 4:", senderSocketId);
                     if (sendersocketId) {
                       getIo().to(sendersocketId).emit("new_message", {
                         message: messagewhithNentionAndReferences,
@@ -732,6 +744,8 @@ MessageSendOne =  async (element)=>{
               }
             } 
             else {
+              console.log("Receiver Socket ID 5:", receiverSocketId);
+// console.log("Sender Socket ID:", senderSocketId);
               if (receiverSocketId) {
                 try {
                   getIo().to(receiverSocketId).emit("new_message", {
