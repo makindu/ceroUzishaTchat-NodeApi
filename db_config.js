@@ -4,7 +4,7 @@ const DBConfig = {
   database_name: "bfqdnq3wtsbfpfpgpz8e",
   database_username: "ux64e9f2wneaessp",
   database_password: "PKe5EWLo40kpNKs15uOw",
-  dialect: "mysql",
+  dialect: "mysql"
 };
 
 module.exports = DBConfig;
